@@ -1943,7 +1943,7 @@ async function sendAI() {
   aiHistory.push({ role: 'user', content: msg });
 
   try {
-    const res = await fetch(`${EDGE_FN_URL}/ai-chat`, {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/dashboard-ai`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
