@@ -530,8 +530,7 @@ const SUPABASE_URL      = 'https://hfxagwcwaalrmaqzhyfj.supabase.co';
 const SUPABASE_ANON     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmeGFnd2N3YWFscm1hcXpoeWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MzY5NzIsImV4cCI6MjA5MDIxMjk3Mn0.LMFfFRmqW34PT70zAOTj4zsUWmrDl_P4MXL0wZBkxYc';
 const DISCORD_CLIENT_ID = '1487252546060947476';
 const EDGE_TOKEN_URL    = 'https://hfxagwcwaalrmaqzhyfj.supabase.co/functions/v1/discord-oauth';
-const base = window.location.href.split('?')[0].split('#')[0];
-const REDIRECT_URI = base.substring(0, base.lastIndexOf('/') + 1) + 'oauth-callback.html';
+const REDIRECT_URI = window.location.origin + window.location.pathname;
 
 // ── Snowflakes ────────────────────────────────────────
 (function(){
@@ -579,7 +578,7 @@ async function handleCallback(code, state){
     if(!r.ok) throw new Error(await r.text());
     const {access_token} = await r.json();
     sessionStorage.setItem('discord_token', access_token);
-    window.history.replaceState({},'',REDIRECT_URI);
+    window.history.replaceState({}, '', window.location.pathname);
     await loadUser(access_token);
   }catch(e){ showToast('Login failed: '+e.message,true); showLogin(); }
 }
@@ -748,10 +747,14 @@ document.getElementById('login-btn').addEventListener('click', e => {
 // ── Bootstrap ─────────────────────────────────────────
 (async()=>{
   try {
-    const token=sessionStorage.getItem('discord_token');
+    const params = new URLSearchParams(window.location.search);
+    const code   = params.get('code');
+    const state  = params.get('state');
+    if(code){ await handleCallback(code, state); return; }
+    const token = sessionStorage.getItem('discord_token');
     if(token){ await loadUser(token); return; }
     showLogin();
-  } catch(e) { console.error('Bootstrap error', e); showLogin(); }
+  } catch(e) { console.error('[Jiro] Bootstrap error:', e); showLogin(); }
 })();
 </script>
 </body>
