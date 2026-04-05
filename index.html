@@ -76,7 +76,7 @@
 
   /* Login */
   #login-screen {
-    position: fixed; inset: 0; display: none;
+    position: fixed; inset: 0; display: flex;
     align-items: center; justify-content: center; z-index: 100;
   }
   .login-card {
@@ -304,8 +304,6 @@
 
 <div class="snowflakes" id="snowflakes"></div>
 
-<div id="loading">
-  <div class="loading-bear"><i class="fas fa-snowflake"></i></div>
   <div class="loading-text">Loading Jiro<span class="loading-dots"></span></div>
 </div>
 
@@ -528,11 +526,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ── CONFIG ────────────────────────────────────────────
-const SUPABASE_URL      = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON     = 'YOUR_SUPABASE_ANON_KEY';
-const DISCORD_CLIENT_ID = 'YOUR_DISCORD_CLIENT_ID';
-const EDGE_TOKEN_URL    = 'YOUR_SUPABASE_EDGE_FUNCTION_URL/discord-oauth';
-const REDIRECT_URI      = window.location.origin + window.location.pathname;
+const SUPABASE_URL      = 'https://hfxagwcwaalrmaqzhyfj.supabase.co';
+const SUPABASE_ANON     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmeGFnd2N3YWFscm1hcXpoeWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MzY5NzIsImV4cCI6MjA5MDIxMjk3Mn0.LMFfFRmqW34PT70zAOTj4zsUWmrDl_P4MXL0wZBkxYc';
+const DISCORD_CLIENT_ID = '1487252546060947476';
+const EDGE_TOKEN_URL    = 'https://hfxagwcwaalrmaqzhyfj.supabase.co/functions/v1/discord-oauth';
+const REDIRECT_URI      = window.location.origin + window.location.pathname.replace(/[^\/]*$/, 'oauth-callback.html');
 
 // ── Snowflakes ────────────────────────────────────────
 (function(){
@@ -563,7 +561,6 @@ function getOAuthURL(){
 async function handleCallback(code, state){
   if(state && sessionStorage.getItem('oauth_state')!==state){ showToast('State mismatch.',true); return showLogin(); }
   sessionStorage.removeItem('oauth_state');
-  showLoading('Logging you in…');
   try{
     const r = await fetch(EDGE_TOKEN_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,redirect_uri:REDIRECT_URI})});
     if(!r.ok) throw new Error(await r.text());
@@ -575,7 +572,6 @@ async function handleCallback(code, state){
 }
 
 async function loadUser(token){
-  showLoading('Loading your servers…');
   try {
     const [mR,gR] = await Promise.all([
       fetch('https://discord.com/api/users/@me',{headers:{Authorization:`Bearer ${token}`}}),
@@ -591,13 +587,12 @@ async function loadUser(token){
     const sel = document.getElementById('guild-select');
     sel.innerHTML = '<option value="">— Pick a server —</option>';
     adminGuilds.forEach(g=>{ const o=document.createElement('option'); o.value=g.id; o.textContent=g.name; sel.appendChild(o); });
-    hideLoading(); showApp();
+    showApp();
   } catch(e) { showToast('Connection error: '+e.message, true); showLogin(); }
 }
 
 // ── Config ────────────────────────────────────────────
 async function loadConfig(guildId){
-  showLoading('Loading config…');
   try{
     const {data} = await supabase.from('guild_configs').select('config').eq('guild_id',guildId);
     config    = (data&&data[0]?.config) ? data[0].config : {};
@@ -606,8 +601,8 @@ async function loadConfig(guildId){
     populateForm();
     document.getElementById('guild-id-label').textContent = `· ${guildId}`;
     document.getElementById('no-guild-msg').style.display = 'none';
-    dirty=false; updateSaveBar(); hideLoading();
-  }catch(e){ showToast('Failed to load config.',true); hideLoading(); }
+    dirty=false; updateSaveBar();
+  }catch(e){ showToast('Failed to load config.',true); }
 }
 
 async function saveConfig(){
@@ -702,9 +697,7 @@ document.querySelectorAll('input:not(#bad-word-input):not(#self-role-input),text
 });
 
 // ── UI ────────────────────────────────────────────────
-function showLoading(msg='Loading…'){ document.getElementById('loading').style.display='flex'; document.querySelector('#loading .loading-text').innerHTML=msg+'<span class="loading-dots"></span>'; }
-function hideLoading(){ document.getElementById('loading').style.display='none'; }
-function showLogin(){ hideLoading(); document.getElementById('login-screen').style.display='flex'; document.getElementById('app').style.display='none'; }
+function showLogin(){ document.getElementById('login-screen').style.display='flex'; document.getElementById('app').style.display='none'; }
 function showApp(){ document.getElementById('login-screen').style.display='none'; document.getElementById('app').style.display='block'; }
 function showToast(msg,isError=false){ const t=document.getElementById('toast'); t.innerHTML=(isError?'<i class="fas fa-times-circle"></i> ':'<i class="fas fa-check-circle"></i> ')+msg; t.className=(isError?'error':'')+' show'; setTimeout(()=>t.className=isError?'error':'',3500); }
 
@@ -732,12 +725,10 @@ document.getElementById('login-btn').addEventListener('click',e=>{ e.preventDefa
 // ── Bootstrap ─────────────────────────────────────────
 (async()=>{
   try {
-    const p=new URLSearchParams(window.location.search), code=p.get('code'), state=p.get('state');
-    if(code){ await handleCallback(code,state); return; }
     const token=sessionStorage.getItem('discord_token');
     if(token){ await loadUser(token); return; }
-    hideLoading(); showLogin();
-  } catch(e) { console.error('Bootstrap error', e); hideLoading(); showLogin(); }
+    showLogin();
+  } catch(e) { console.error('Bootstrap error', e); showLogin(); }
 })();
 </script>
 </body>
