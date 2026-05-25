@@ -1104,7 +1104,22 @@ async function sbPost(table, body) {
     headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify(body),
   });
-  return r.json();
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.message || data?.error || `POST ${table} ${r.status}`);
+  return data;
+}
+
+async function sbUpsert(table, body, onConflict) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  if (onConflict) url.searchParams.set('on_conflict', onConflict);
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=representation' },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.message || data?.error || `UPSERT ${table} ${r.status}`);
+  return data;
 }
 
 async function sbPatch(table, match, body) {
@@ -1115,13 +1130,16 @@ async function sbPatch(table, match, body) {
     headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify(body),
   });
-  return r.json();
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.message || data?.error || `PATCH ${table} ${r.status}`);
+  return data;
 }
 
 async function sbDelete(table, match) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
   Object.entries(match).forEach(([k,v]) => url.searchParams.set(k,v));
-  return fetch(url, { method: 'DELETE', headers: sbHeaders() });
+  const r = await fetch(url, { method: 'DELETE', headers: sbHeaders() });
+  if (!r.ok) { const d = await r.json().catch(()=>{}); throw new Error(d?.message || `DELETE ${table} ${r.status}`); }
 }
 
 function sbHeaders() {
@@ -1130,19 +1148,31 @@ function sbHeaders() {
 
 async function loadGuildConfig() {
   if (!STATE.currentGuild) return;
-  try {
-    const rows = await sbGet('guild_config', { guild_id: `eq.${STATE.currentGuild.id}` });
-    STATE.guildConfig = {};
-    rows.forEach(r => { STATE.guildConfig[r.key] = r.value; });
-    applyConfigToUI();
-  } catch(e) {
-    // Try guild_configs as fallback (alternate table name)
+  const gid = STATE.currentGuild.id;
+
+  for (const table of ['guild_configs', 'guild_config']) {
     try {
-      const rows2 = await sbGet('guild_configs', { guild_id: `eq.${STATE.currentGuild.id}` });
-      STATE.guildConfig = {};
-      rows2.forEach(r => { STATE.guildConfig[r.key] = r.value; });
+      const rows = await sbGet(table, { guild_id: `eq.${gid}` });
+      if (!Array.isArray(rows)) continue;
+
+      STATE.guildConfig  = {};
+      STATE._configTable = table;
+
+      if (rows.length > 0) {
+        const sample = rows[0];
+        if ('key' in sample && 'value' in sample) {
+          STATE._configMode = 'kv';
+          rows.forEach(r => { STATE.guildConfig[r.key] = r.value; });
+        } else {
+          STATE._configMode = 'columns';
+          Object.assign(STATE.guildConfig, sample);
+        }
+      } else {
+        STATE._configMode = 'kv';
+      }
       applyConfigToUI();
-    } catch(e2) {}
+      return;
+    } catch(e) {}
   }
 }
 
@@ -1207,33 +1237,39 @@ function setVal(id, val) {
 
 async function saveSetting(key, value) {
   if (!STATE.currentGuild) return;
-  const gid = STATE.currentGuild.id;
-  // Determine which config table is in use (prefer guild_config singular)
-  const configTable = STATE._configTable || 'guild_config';
+  const gid   = STATE.currentGuild.id;
+  const table = STATE._configTable || 'guild_configs';
+  const mode  = STATE._configMode  || 'kv';
+
   try {
-    const existing = await sbGet(configTable, { guild_id: `eq.${gid}`, key: `eq.${key}` });
-    if (existing.length) {
-      await sbPatch(configTable, { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
+    if (mode === 'columns') {
+      // Single row per guild — PATCH the column, INSERT if no row exists
+      const existing = await sbGet(table, { guild_id: `eq.${gid}`, select: 'guild_id' });
+      if (existing.length) {
+        await sbPatch(table, { guild_id: `eq.${gid}` }, { [key]: String(value) });
+      } else {
+        await sbPost(table, { guild_id: gid, [key]: String(value) });
+      }
     } else {
-      await sbPost(configTable, { guild_id: gid, key, value: String(value), created_at: new Date().toISOString() });
+      // Key-value table — upsert on (guild_id, key)
+      await sbUpsert(table, { guild_id: gid, key, value: String(value) }, 'guild_id,key');
     }
     STATE.guildConfig[key] = value;
-    toast('Setting saved', 'success');
+    toast('Saved', 'success');
   } catch(e) {
-    // Fallback to guild_configs
+    // Upsert may fail if no unique constraint; fall back to GET + POST/PATCH
     try {
-      const alt = configTable === 'guild_config' ? 'guild_configs' : 'guild_config';
-      const existing2 = await sbGet(alt, { guild_id: `eq.${gid}`, key: `eq.${key}` });
-      if (existing2.length) {
-        await sbPatch(alt, { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
+      const existing = await sbGet(table, { guild_id: `eq.${gid}`, key: `eq.${key}` });
+      if (existing.length) {
+        await sbPatch(table, { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
       } else {
-        await sbPost(alt, { guild_id: gid, key, value: String(value), created_at: new Date().toISOString() });
+        await sbPost(table, { guild_id: gid, key, value: String(value) });
       }
-      STATE._configTable = alt;
       STATE.guildConfig[key] = value;
-      toast('Setting saved', 'success');
+      toast('Saved', 'success');
     } catch(e2) {
-      toast('Failed to save: ' + e2.message, 'error');
+      toast('Save failed: ' + (e2.message || e.message), 'error');
+      console.error('saveSetting:', key, e.message, e2.message);
     }
   }
 }
