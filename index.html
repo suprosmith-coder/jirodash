@@ -902,7 +902,7 @@
             <button class="btn btn-primary" onclick="saveEconomy()"><i class="fa fa-floppy-disk"></i> Save</button>
           </div>
           <div class="card">
-            <div class="card-title"><i class="fa fa-store"></i> Shop Items</div>
+            <div class="card-title" style="justify-content:space-between"><span><i class="fa fa-store"></i> Shop Items</span><button class="btn btn-primary btn-sm" onclick="openShopItemModal()"><i class="fa fa-plus"></i> Add</button></div>
             <div id="shop-items"><div class="spinner"></div></div>
           </div>
         </div>
@@ -1120,11 +1120,19 @@ function sbHeaders() {
 async function loadGuildConfig() {
   if (!STATE.currentGuild) return;
   try {
-    const rows = await sbGet('guild_configs', { guild_id: `eq.${STATE.currentGuild.id}` });
+    const rows = await sbGet('guild_config', { guild_id: `eq.${STATE.currentGuild.id}` });
     STATE.guildConfig = {};
     rows.forEach(r => { STATE.guildConfig[r.key] = r.value; });
     applyConfigToUI();
-  } catch(e) {}
+  } catch(e) {
+    // Try guild_configs as fallback (alternate table name)
+    try {
+      const rows2 = await sbGet('guild_configs', { guild_id: `eq.${STATE.currentGuild.id}` });
+      STATE.guildConfig = {};
+      rows2.forEach(r => { STATE.guildConfig[r.key] = r.value; });
+      applyConfigToUI();
+    } catch(e2) {}
+  }
 }
 
 function applyConfigToUI() {
@@ -1189,17 +1197,33 @@ function setVal(id, val) {
 async function saveSetting(key, value) {
   if (!STATE.currentGuild) return;
   const gid = STATE.currentGuild.id;
+  // Determine which config table is in use (prefer guild_config singular)
+  const configTable = STATE._configTable || 'guild_config';
   try {
-    const existing = await sbGet('guild_configs', { guild_id: `eq.${gid}`, key: `eq.${key}` });
+    const existing = await sbGet(configTable, { guild_id: `eq.${gid}`, key: `eq.${key}` });
     if (existing.length) {
-      await sbPatch('guild_configs', { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
+      await sbPatch(configTable, { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
     } else {
-      await sbPost('guild_configs', { guild_id: gid, key, value: String(value) });
+      await sbPost(configTable, { guild_id: gid, key, value: String(value), created_at: new Date().toISOString() });
     }
     STATE.guildConfig[key] = value;
     toast('Setting saved', 'success');
   } catch(e) {
-    toast('Failed to save', 'error');
+    // Fallback to guild_configs
+    try {
+      const alt = configTable === 'guild_config' ? 'guild_configs' : 'guild_config';
+      const existing2 = await sbGet(alt, { guild_id: `eq.${gid}`, key: `eq.${key}` });
+      if (existing2.length) {
+        await sbPatch(alt, { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
+      } else {
+        await sbPost(alt, { guild_id: gid, key, value: String(value), created_at: new Date().toISOString() });
+      }
+      STATE._configTable = alt;
+      STATE.guildConfig[key] = value;
+      toast('Setting saved', 'success');
+    } catch(e2) {
+      toast('Failed to save: ' + e2.message, 'error');
+    }
   }
 }
 
@@ -1265,74 +1289,159 @@ async function loadOverview() {
   if (!STATE.currentGuild) return;
   const gid = STATE.currentGuild.id;
 
-  // Fake realistic stats
-  document.getElementById('stat-members').textContent   = fakeNum(200,5000);
-  document.getElementById('stat-online').textContent    = fakeNum(20,300);
-  document.getElementById('stat-warns').textContent     = fakeNum(0,15);
-  document.getElementById('stat-giveaways').textContent = fakeNum(0,4);
-  document.getElementById('stat-messages').textContent  = fakeNum(500,8000);
-  document.getElementById('stat-coins').textContent     = fakeNum(10000,500000).toLocaleString();
+  // ── Real stats from Supabase ──
+  const todayISO = new Date(new Date().setHours(0,0,0,0)).toISOString();
+
+  // Members & online from profiles/users table
+  try {
+    const profiles = await sbGet('profiles', { guild_id: `eq.${gid}`, select: 'user_id,status', limit: '5000' });
+    const total  = profiles.length || '—';
+    const online = profiles.filter(p => p.status === 'online' || p.status === 'idle' || p.status === 'dnd').length;
+    document.getElementById('stat-members').textContent = total;
+    document.getElementById('stat-online').textContent  = online || '—';
+  } catch(e) {
+    document.getElementById('stat-members').textContent = '—';
+    document.getElementById('stat-online').textContent  = '—';
+  }
+
+  // Warnings today
+  try {
+    const warns = await sbGet('warnings', { guild_id: `eq.${gid}`, created_at: `gte.${todayISO}`, select: 'id' });
+    document.getElementById('stat-warns').textContent = warns.length;
+  } catch(e) { document.getElementById('stat-warns').textContent = '—'; }
+
+  // Active giveaways count
+  try {
+    const gws = await sbGet('giveaways', { guild_id: `eq.${gid}`, ended: 'eq.false', select: 'id' });
+    document.getElementById('stat-giveaways').textContent = gws.length;
+  } catch(e) { document.getElementById('stat-giveaways').textContent = '—'; }
+
+  // Messages today from chat_messages or channel_stats_cache
+  try {
+    const msgs = await sbGet('chat_messages', { guild_id: `eq.${gid}`, created_at: `gte.${todayISO}`, select: 'id', limit: '9999' });
+    document.getElementById('stat-messages').textContent = msgs.length;
+  } catch(e) {
+    try {
+      const cache = await sbGet('channel_stats_cache', { guild_id: `eq.${gid}`, select: 'messages_today' });
+      const total = cache.reduce((s,r) => s + (r.messages_today||0), 0);
+      document.getElementById('stat-messages').textContent = total || '—';
+    } catch(e2) { document.getElementById('stat-messages').textContent = '—'; }
+  }
+
+  // NixCoins circulating: sum from user_shards then fallback to profiles
+  try {
+    const shards = await sbGet('user_shards', { guild_id: `eq.${gid}`, select: 'balance', limit: '9999' });
+    const total = shards.reduce((s,r) => s + (parseInt(r.balance)||0), 0);
+    document.getElementById('stat-coins').textContent = total.toLocaleString();
+  } catch(e) {
+    try {
+      const txs = await sbGet('transactions', { guild_id: `eq.${gid}`, select: 'amount,type', limit: '9999' });
+      const net = txs.reduce((s,r) => s + (r.type==='credit'?parseInt(r.amount||0):-parseInt(r.amount||0)), 0);
+      document.getElementById('stat-coins').textContent = net > 0 ? net.toLocaleString() : '—';
+    } catch(e2) { document.getElementById('stat-coins').textContent = '—'; }
+  }
 
   loadLogsInto('ov-logs', 8);
   loadLeaderboard('ov-leaderboard', 5);
   loadGiveawaysInto('ov-giveaways');
 }
 
-function fakeNum(min, max) {
-  return Math.floor(Math.random()*(max-min)+min);
+// ─── LOGS ──────────────────────────────────────────────────────────────────
+const LOG_ACTION_META = {
+  ban:    { icon:'fa-ban',                 cls:'ban',  label:'Ban'  },
+  kick:   { icon:'fa-user-slash',          cls:'kick', label:'Kick' },
+  mute:   { icon:'fa-microphone-slash',    cls:'mute', label:'Mute' },
+  warn:   { icon:'fa-triangle-exclamation',cls:'warn', label:'Warn' },
+  join:   { icon:'fa-right-to-bracket',    cls:'join', label:'Join' },
+  leave:  { icon:'fa-right-from-bracket',  cls:'leave',label:'Leave'},
+  unban:  { icon:'fa-rotate-left',         cls:'join', label:'Unban'},
+  unmute: { icon:'fa-microphone',          cls:'join', label:'Unmute'},
+  edit:   { icon:'fa-pen',                 cls:'',     label:'Edit' },
+  delete: { icon:'fa-trash',              cls:'ban',  label:'Delete'},
+};
+
+function logActionMeta(action) {
+  return LOG_ACTION_META[action?.toLowerCase()] || { icon:'fa-circle-info', cls:'', label: action || 'Event' };
 }
 
-// ─── LOGS ──────────────────────────────────────────────────────────────────
-const LOG_TYPES = [
-  { type:'ban',  icon:'fa-ban',                 text: (m) => `<strong>${m}</strong> was banned` },
-  { type:'kick', icon:'fa-user-slash',           text: (m) => `<strong>${m}</strong> was kicked` },
-  { type:'mute', icon:'fa-microphone-slash',     text: (m) => `<strong>${m}</strong> was muted for 1h` },
-  { type:'warn', icon:'fa-triangle-exclamation', text: (m) => `<strong>${m}</strong> received a warning` },
-  { type:'join', icon:'fa-right-to-bracket',     text: (m) => `<strong>${m}</strong> joined the server` },
-  { type:'leave',icon:'fa-right-from-bracket',   text: (m) => `<strong>${m}</strong> left the server` },
-  { type:'edit', icon:'fa-pen',                  text: (m) => `<strong>${m}</strong> edited a message` },
-];
-const FAKE_NAMES = ['Blueey','JohnDoe','Ninjax','Pixel','SkyWolf','CoolBear','AlphaFox','Neon','Static','Ember'];
-
-function fakeLogs(n = 12) {
-  return Array.from({length:n}, (_,i) => {
-    const t = LOG_TYPES[Math.floor(Math.random()*LOG_TYPES.length)];
-    const name = FAKE_NAMES[Math.floor(Math.random()*FAKE_NAMES.length)];
-    const mins = Math.floor(Math.random()*120);
-    return { type: t.type, icon: t.icon, text: t.text(name), time: mins === 0 ? 'now' : `${mins}m ago` };
-  });
+function renderLogItem(l) {
+  const action = l.action || l.type || 'event';
+  const meta   = logActionMeta(action);
+  const target = l.target_id ? `<strong>${l.target_id}</strong>` : '';
+  const reason = l.reason ? ` — ${l.reason}` : '';
+  const text   = l.text || `${meta.label}${target ? ': '+target : ''}${reason}`;
+  return `
+    <div class="log-item">
+      <div class="log-dot ${meta.cls}"></div>
+      <div class="log-time">${l.time || timeAgo(l.created_at)}</div>
+      <div class="log-text"><i class="fa ${meta.icon}" style="font-size:11px;opacity:.7;margin-right:4px"></i>${text}</div>
+    </div>`;
 }
 
 async function loadLogsInto(containerId, limit = 12) {
   const el = document.getElementById(containerId);
   if (!el) return;
+  if (!STATE.currentGuild) { el.innerHTML = `<div class="empty"><i class="fa fa-scroll"></i><p>Select a server</p></div>`; return; }
 
-  // Try real DB first
+  el.innerHTML = '<div class="spinner"></div>';
+  const gid = STATE.currentGuild.id;
   let logs = [];
-  if (STATE.currentGuild) {
+
+  // Primary: mod_logs table
+  try {
+    logs = await sbGet('mod_logs', {
+      guild_id: `eq.${gid}`,
+      order:    'created_at.desc',
+      limit:    String(limit),
+    });
+  } catch(e) {}
+
+  // Fallback: mod_track
+  if (!logs.length) {
     try {
-      logs = await sbGet('audit_logs', {
-        guild_id: `eq.${STATE.currentGuild.id}`,
-        order: 'created_at.desc',
-        limit: String(limit),
+      logs = await sbGet('mod_track', {
+        guild_id: `eq.${gid}`,
+        order:    'created_at.desc',
+        limit:    String(limit),
       });
     } catch(e) {}
   }
 
-  if (!logs.length) logs = fakeLogs(limit);
+  // Fallback: modtrack (alternate table name)
+  if (!logs.length) {
+    try {
+      logs = await sbGet('modtrack', {
+        guild_id: `eq.${gid}`,
+        order:    'created_at.desc',
+        limit:    String(limit),
+      });
+    } catch(e) {}
+  }
 
-  el.innerHTML = logs.map(l => `
-    <div class="log-item">
-      <div class="log-dot ${l.type || ''}"></div>
-      <div class="log-time">${l.time || timeAgo(l.created_at)}</div>
-      <div class="log-text">${l.text || (l.action + ': <strong>' + (l.target_id||'') + '</strong>')}</div>
-    </div>
-  `).join('');
+  if (!logs.length) {
+    // Filter from log-filter select if on logs page
+    el.innerHTML = `<div class="empty"><i class="fa fa-scroll"></i><p>No log entries yet</p></div>`;
+    return;
+  }
+
+  // Apply filter if on full logs page
+  const filterEl = document.getElementById('log-filter');
+  const filterVal = filterEl?.value || '';
+  if (filterVal) logs = logs.filter(l => (l.action||l.type||'') === filterVal);
+
+  el.innerHTML = logs.map(renderLogItem).join('') || `<div class="empty"><i class="fa fa-scroll"></i><p>No results</p></div>`;
 }
 
 async function loadLogs() {
   await loadLogsInto('logs-table', 40);
-  document.getElementById('log-badge').textContent = fakeNum(5,30);
+  // Real unread count: mod_logs from today
+  try {
+    const todayISO = new Date(new Date().setHours(0,0,0,0)).toISOString();
+    const recent = await sbGet('mod_logs', { guild_id: `eq.${STATE.currentGuild?.id}`, created_at: `gte.${todayISO}`, select: 'id' });
+    document.getElementById('log-badge').textContent = recent.length || '0';
+  } catch(e) {
+    document.getElementById('log-badge').textContent = '0';
+  }
 }
 
 function timeAgo(ts) {
@@ -1347,7 +1456,7 @@ function timeAgo(ts) {
 async function loadLeaderboard(containerId, limit = 10) {
   const el = document.getElementById(containerId);
   if (!el) return;
-
+  el.innerHTML = '<div class="spinner"></div>';
   let rows = [];
   if (STATE.currentGuild) {
     try {
@@ -1360,12 +1469,8 @@ async function loadLeaderboard(containerId, limit = 10) {
   }
 
   if (!rows.length) {
-    rows = Array.from({length: Math.min(limit,8)}, (_,i) => ({
-      user_id: String(100000+i),
-      xp: Math.floor(Math.random()*(5000-i*400)),
-      level: Math.floor(Math.random()*(30-i*2)),
-      _name: FAKE_NAMES[i % FAKE_NAMES.length],
-    }));
+    el.innerHTML = `<div class="empty"><i class="fa fa-trophy"></i><p>No XP data yet</p></div>`;
+    return;
   }
 
   const maxXp = rows[0]?.xp || 1;
@@ -1374,10 +1479,10 @@ async function loadLeaderboard(containerId, limit = 10) {
   el.innerHTML = rows.map((r,i) => `
     <div class="lb-row">
       <div class="lb-rank ${rankCls(i)}">${i+1}</div>
-      <div class="lb-avatar">${(r._name || 'U')[0]}</div>
+      <div class="lb-avatar">${(r.username||r.user_id||'U')[0].toUpperCase()}</div>
       <div style="flex:1;min-width:0">
-        <div class="lb-name">${r._name || `User ${String(r.user_id).slice(-4)}`}</div>
-        <div class="xp-bar-outer"><div class="xp-bar-inner" style="width:${Math.round(r.xp/maxXp*100)}%"></div></div>
+        <div class="lb-name">${r.username || `…${String(r.user_id).slice(-6)}`}</div>
+        <div class="xp-bar-outer"><div class="xp-bar-inner" style="width:${Math.round((r.xp||0)/maxXp*100)}%"></div></div>
         <div class="lb-xp">${(r.xp||0).toLocaleString()} XP</div>
       </div>
       <div class="lb-level">Lv.${r.level||0}</div>
@@ -1462,40 +1567,28 @@ async function rerollGiveaway(id) {
 async function loadWarnings() {
   const el = document.getElementById('warnings-list');
   if (!el) return;
-
+  el.innerHTML = '<div class="spinner"></div>';
+  if (!STATE.currentGuild) { el.innerHTML = `<div class="empty"><i class="fa fa-circle-check"></i><p>Select a server</p></div>`; return; }
   let rows = [];
-  if (STATE.currentGuild) {
-    try {
-      rows = await sbGet('warnings', {
-        guild_id: `eq.${STATE.currentGuild.id}`,
-        order: 'created_at.desc',
-        limit: '30',
-      });
-    } catch(e) {}
-  }
-
-  if (!rows.length) {
-    rows = Array.from({length:6}, (_,i) => ({
-      id: i+1,
-      target_id: String(100000+i),
-      mod_id:    '999',
-      reason:    ['Spam','Toxic behavior','Alt account detected','NSFW content','Advertising'][i%5],
-      created_at: new Date(Date.now() - i*3600000).toISOString(),
-      _name: FAKE_NAMES[i%FAKE_NAMES.length],
-    }));
-  }
-
+  try {
+    rows = await sbGet('warnings', {
+      guild_id: `eq.${STATE.currentGuild.id}`,
+      order:    'created_at.desc',
+      limit:    '50',
+    });
+  } catch(e) {}
+  if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-circle-check"></i><p>No warnings recorded</p></div>`; return; }
   el.innerHTML = rows.map(w => `
     <div class="warn-item">
       <div class="warn-icon"><i class="fa fa-triangle-exclamation"></i></div>
       <div style="flex:1">
-        <div class="warn-user">${w._name || 'User '+String(w.target_id).slice(-4)}</div>
+        <div class="warn-user">${w.target_id}</div>
         <div class="warn-reason">${w.reason||'No reason'}</div>
-        <div class="warn-meta"><i class="fa fa-clock"></i> ${timeAgo(w.created_at)} &nbsp;·&nbsp; ID: ${w.id}</div>
+        <div class="warn-meta"><i class="fa fa-clock"></i> ${timeAgo(w.created_at)} &nbsp;·&nbsp; Mod: ${w.mod_id||'—'} &nbsp;·&nbsp; ID: ${w.id}</div>
       </div>
       <button class="btn btn-danger btn-sm" onclick="deleteWarning(${w.id})"><i class="fa fa-trash"></i></button>
     </div>
-  `).join('') || `<div class="empty"><i class="fa fa-circle-check"></i><p>No warnings found</p></div>`;
+  `).join('');
 }
 
 async function deleteWarning(id) {
@@ -1507,7 +1600,52 @@ async function deleteWarning(id) {
 }
 
 async function searchWarnings() {
-  loadWarnings();
+  const q = document.getElementById('warn-search')?.value?.trim();
+  const el = document.getElementById('warnings-list');
+  if (!el) return;
+  if (!STATE.currentGuild) return;
+  el.innerHTML = '<div class="spinner"></div>';
+  let rows = [];
+  try {
+    const params = { guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '30' };
+    if (q) params.target_id = `eq.${q}`;
+    rows = await sbGet('warnings', params);
+  } catch(e) {}
+  if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-circle-check"></i><p>No warnings found${q ? ' for '+q : ''}</p></div>`; return; }
+  el.innerHTML = rows.map(w => `
+    <div class="warn-item">
+      <div class="warn-icon"><i class="fa fa-triangle-exclamation"></i></div>
+      <div style="flex:1">
+        <div class="warn-user">${w.target_id}</div>
+        <div class="warn-reason">${w.reason||'No reason'}</div>
+        <div class="warn-meta"><i class="fa fa-clock"></i> ${timeAgo(w.created_at)} &nbsp;·&nbsp; Mod: ${w.mod_id||'—'}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteWarning(${w.id})"><i class="fa fa-trash"></i></button>
+    </div>
+  `).join('');
+}
+
+async function searchNotes() {
+  const q = document.getElementById('note-search')?.value?.trim();
+  const el = document.getElementById('notes-list');
+  if (!el) return;
+  if (!STATE.currentGuild) return;
+  el.innerHTML = '<div class="spinner"></div>';
+  let rows = [];
+  try {
+    const params = { guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '20' };
+    if (q) params.target_id = `eq.${q}`;
+    rows = await sbGet('staff_notes', params);
+  } catch(e) {}
+  if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-note-sticky"></i><p>No notes found${q ? ' for '+q : ''}</p></div>`; return; }
+  el.innerHTML = `<table><thead><tr><th>User ID</th><th>Note</th><th>Added</th><th>By</th><th></th></tr></thead><tbody>` +
+    rows.map(r => `<tr>
+      <td><strong>${r.target_id}</strong></td>
+      <td>${(r.note||'').substring(0,80)}${r.note?.length>80?'…':''}</td>
+      <td>${timeAgo(r.created_at)}</td>
+      <td>${r.mod_id||'—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteNote(${r.id})"><i class="fa fa-trash"></i></button></td>
+    </tr>`).join('') + `</tbody></table>`;
 }
 
 // ─── MOD RECENT ────────────────────────────────────────────────────────────
@@ -1626,44 +1764,87 @@ function removeBadWord(i) {
 async function loadShop() {
   const el = document.getElementById('shop-items');
   if (!el) return;
+  el.innerHTML = '<div class="spinner"></div>';
   let rows = [];
   if (STATE.currentGuild) {
     try {
-      rows = await sbGet('shop_items', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '10' });
+      rows = await sbGet('shop_items', { guild_id: `eq.${STATE.currentGuild.id}`, order: 'price.asc', limit: '20' });
     } catch(e) {}
   }
   if (!rows.length) {
-    const items = [
-      {name:'VIP Role', price:1000, type:'role'},
-      {name:'Gold Badge', price:500, type:'cosmetic'},
-      {name:'Custom Color', price:750, type:'cosmetic_role'},
-    ];
-    el.innerHTML = items.map(i => `
-      <div class="shopitem">
-        <div class="shopitem-icon">🎁</div>
-        <div style="flex:1"><div class="shopitem-name">${i.name}</div><div class="shopitem-cost"><i class="fa fa-coins coin-icon"></i> ${i.price} NixCoins</div></div>
-        <span class="badge badge-blue">${i.type}</span>
-      </div>
-    `).join('');
+    el.innerHTML = `<div class="empty"><i class="fa fa-store"></i><p>No shop items yet</p></div>`;
     return;
   }
   el.innerHTML = rows.map(i => `
     <div class="shopitem">
       <div class="shopitem-icon">🎁</div>
-      <div style="flex:1"><div class="shopitem-name">${i.name}</div><div class="shopitem-cost"><i class="fa fa-coins coin-icon"></i> ${i.price} NixCoins</div></div>
-      <span class="badge badge-blue">${i.item_type||'item'}</span>
+      <div style="flex:1">
+        <div class="shopitem-name">${i.name}</div>
+        <div class="shopitem-cost"><i class="fa fa-coins coin-icon"></i> ${(i.price||i.cost||0).toLocaleString()} NixCoins</div>
+      </div>
+      <span class="badge badge-blue">${i.item_type||i.type||'item'}</span>
+      <button class="btn btn-danger btn-sm" style="margin-left:8px" onclick="deleteShopItem('${i.id}')"><i class="fa fa-trash"></i></button>
     </div>
   `).join('');
+}
+
+function openShopItemModal() {
+  openModal('Add Shop Item', `
+    <div class="input-group"><label class="input-label">Item Name</label><input type="text" class="inp" id="m-name" placeholder="e.g. VIP Role"></div>
+    <div class="input-group"><label class="input-label">Price (NixCoins)</label><input type="number" class="inp" id="m-price" value="500" min="1"></div>
+    <div class="input-group"><label class="input-label">Type</label>
+      <select class="inp" id="m-itype">
+        <option value="role">Role</option>
+        <option value="cosmetic">Cosmetic</option>
+        <option value="badge">Badge</option>
+        <option value="custom">Custom</option>
+      </select>
+    </div>
+    <div class="input-group"><label class="input-label">Role ID (if applicable)</label><input type="text" class="inp" id="m-roleid" placeholder="Discord Role ID…"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success" onclick="execShopItem()"><i class="fa fa-plus"></i> Add Item</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function execShopItem() {
+  const name   = document.getElementById('m-name')?.value?.trim();
+  const price  = parseInt(document.getElementById('m-price')?.value) || 500;
+  const itype  = document.getElementById('m-itype')?.value || 'custom';
+  const roleId = document.getElementById('m-roleid')?.value?.trim() || null;
+  if (!name) return toast('Enter an item name','error');
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  try {
+    await sbPost('shop_items', {
+      guild_id: STATE.currentGuild.id,
+      name, price, item_type: itype,
+      role_id: roleId,
+      created_at: new Date().toISOString(),
+    });
+    toast('Shop item added','success');
+    loadShop();
+  } catch(e) { toast('Failed: ' + e.message,'error'); }
+  closeModal();
+}
+
+async function deleteShopItem(id) {
+  try {
+    await sbDelete('shop_items', { id: `eq.${id}` });
+    toast('Item removed','success');
+    loadShop();
+  } catch(e) { toast('Failed','error'); }
 }
 
 // ─── TRIGGERS ──────────────────────────────────────────────────────────────
 async function loadTriggers() {
   const el = document.getElementById('triggers-list');
   if (!el) return;
+  el.innerHTML = '<div class="spinner"></div>';
   let rows = [];
   if (STATE.currentGuild) {
     try {
-      rows = await sbGet('autoresponder_triggers', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '20' });
+      rows = await sbGet('autoresponders', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '20' });
     } catch(e) {}
   }
   if (!rows.length) {
@@ -1674,14 +1855,14 @@ async function loadTriggers() {
     rows.map(r => `<tr>
       <td><strong>${r.trigger}</strong></td>
       <td><span class="badge badge-blue">${r.match_mode||'contains'}</span></td>
-      <td>${(r.response||'').substring(0,60)}…</td>
+      <td>${(r.response||'').substring(0,60)}${r.response?.length>60?'…':''}</td>
       <td><button class="btn btn-danger btn-sm" onclick="deleteTrigger('${r.id}')"><i class="fa fa-trash"></i></button></td>
     </tr>`).join('') + `</tbody></table>`;
 }
 
 async function deleteTrigger(id) {
   try {
-    await sbDelete('autoresponder_triggers', { id: `eq.${id}` });
+    await sbDelete('autoresponders', { id: `eq.${id}` });
     toast('Trigger removed','success');
     loadTriggers();
   } catch(e) { toast('Failed','error'); }
@@ -1691,21 +1872,19 @@ async function deleteTrigger(id) {
 async function loadNotes() {
   const el = document.getElementById('notes-list');
   if (!el) return;
+  el.innerHTML = '<div class="spinner"></div>';
+  if (!STATE.currentGuild) { el.innerHTML = `<div class="empty"><i class="fa fa-note-sticky"></i><p>Select a server</p></div>`; return; }
   let rows = [];
-  if (STATE.currentGuild) {
-    try {
-      rows = await sbGet('staff_notes', { guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '20' });
-    } catch(e) {}
-  }
-  if (!rows.length) {
-    el.innerHTML = `<div class="empty"><i class="fa fa-note-sticky"></i><p>No staff notes yet</p></div>`;
-    return;
-  }
-  el.innerHTML = `<table><thead><tr><th>User</th><th>Note</th><th>Added</th><th></th></tr></thead><tbody>` +
+  try {
+    rows = await sbGet('staff_notes', { guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '30' });
+  } catch(e) {}
+  if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-note-sticky"></i><p>No staff notes yet</p></div>`; return; }
+  el.innerHTML = `<table><thead><tr><th>User ID</th><th>Note</th><th>Added</th><th>By</th><th></th></tr></thead><tbody>` +
     rows.map(r => `<tr>
       <td><strong>${r.target_id}</strong></td>
       <td>${(r.note||'').substring(0,80)}${r.note?.length>80?'…':''}</td>
       <td>${timeAgo(r.created_at)}</td>
+      <td>${r.mod_id||'—'}</td>
       <td><button class="btn btn-danger btn-sm" onclick="deleteNote(${r.id})"><i class="fa fa-trash"></i></button></td>
     </tr>`).join('') + `</tbody></table>`;
 }
@@ -1718,16 +1897,15 @@ async function deleteNote(id) {
   } catch(e) { toast('Failed','error'); }
 }
 
-async function searchNotes() { loadNotes(); }
-
 // ─── ROLE PANELS ───────────────────────────────────────────────────────────
 async function loadRolePanels() {
   const el = document.getElementById('role-panels');
   if (!el) return;
+  el.innerHTML = '<div class="spinner"></div>';
   let rows = [];
   if (STATE.currentGuild) {
     try {
-      rows = await sbGet('reaction_role_panels', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '10' });
+      rows = await sbGet('rr_panels', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '20' });
     } catch(e) {}
   }
   if (!rows.length) {
@@ -1736,7 +1914,7 @@ async function loadRolePanels() {
   }
   el.innerHTML = rows.map(p => `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(100,170,240,0.1)">
-      <div><div style="font-weight:800">${p.title||'Panel'}</div><div style="font-size:12px;color:var(--text-muted)">Channel: ${p.channel_id}</div></div>
+      <div><div style="font-weight:800">${p.title||'Panel'}</div><div style="font-size:12px;color:var(--text-muted)">Channel: ${p.channel_id||'—'}</div></div>
       <button class="btn btn-danger btn-sm" onclick="deletePanel('${p.id}')"><i class="fa fa-trash"></i></button>
     </div>
   `).join('');
@@ -1744,7 +1922,7 @@ async function loadRolePanels() {
 
 async function deletePanel(id) {
   try {
-    await sbDelete('reaction_role_panels', { id: `eq.${id}` });
+    await sbDelete('rr_panels', { id: `eq.${id}` });
     toast('Panel removed','success');
     loadRolePanels();
   } catch(e) { toast('Failed','error'); }
@@ -1780,9 +1958,19 @@ function openBanModal() {
 }
 
 async function execBan() {
-  const uid = document.getElementById('m-uid')?.value;
+  const uid    = document.getElementById('m-uid')?.value?.trim();
+  const reason = document.getElementById('m-reason')?.value?.trim() || 'No reason';
+  const delDays= document.getElementById('m-del')?.value || '0';
   if (!uid) return toast('Enter a User ID','error');
-  toast(`User ${uid} banned`, 'success');
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  const gid = STATE.currentGuild.id;
+  const modId = STATE.user?.id || 'dashboard';
+  try {
+    const entry = { guild_id: gid, action: 'ban', target_id: uid, mod_id: modId, reason, delete_days: parseInt(delDays), created_at: new Date().toISOString() };
+    await sbPost('mod_logs', entry);
+    await sbPost('mod_track', entry).catch(()=>{});
+    toast(`User ${uid} ban logged`, 'success');
+  } catch(e) { toast('DB write failed: ' + e.message, 'error'); }
   closeModal();
 }
 
@@ -1791,10 +1979,26 @@ function openKickModal() {
     <div class="input-group"><label class="input-label">User ID</label><input type="text" class="inp" id="m-uid" placeholder="Discord User ID…"></div>
     <div class="input-group"><label class="input-label">Reason</label><input type="text" class="inp" id="m-reason" placeholder="Reason…"></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-danger" onclick="toast('Kicked','success');closeModal()"><i class="fa fa-user-slash"></i> Kick</button>
+      <button class="btn btn-danger" onclick="execKick()"><i class="fa fa-user-slash"></i> Kick</button>
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
     </div>
   `);
+}
+
+async function execKick() {
+  const uid    = document.getElementById('m-uid')?.value?.trim();
+  const reason = document.getElementById('m-reason')?.value?.trim() || 'No reason';
+  if (!uid) return toast('Enter a User ID','error');
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  const gid = STATE.currentGuild.id;
+  const modId = STATE.user?.id || 'dashboard';
+  try {
+    const entry = { guild_id: gid, action: 'kick', target_id: uid, mod_id: modId, reason, created_at: new Date().toISOString() };
+    await sbPost('mod_logs', entry);
+    await sbPost('mod_track', entry).catch(()=>{});
+    toast(`User ${uid} kick logged`, 'success');
+  } catch(e) { toast('DB write failed: ' + e.message, 'error'); }
+  closeModal();
 }
 
 function openMuteModal() {
@@ -1808,10 +2012,27 @@ function openMuteModal() {
     </div>
     <div class="input-group"><label class="input-label">Reason</label><input type="text" class="inp" id="m-reason" placeholder="Reason…"></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-primary" onclick="toast('User muted','success');closeModal()"><i class="fa fa-microphone-slash"></i> Mute</button>
+      <button class="btn btn-primary" onclick="execMute()"><i class="fa fa-microphone-slash"></i> Mute</button>
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
     </div>
   `);
+}
+
+async function execMute() {
+  const uid      = document.getElementById('m-uid')?.value?.trim();
+  const dur      = document.getElementById('m-dur')?.value || '1h';
+  const reason   = document.getElementById('m-reason')?.value?.trim() || 'No reason';
+  if (!uid) return toast('Enter a User ID','error');
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  const gid = STATE.currentGuild.id;
+  const modId = STATE.user?.id || 'dashboard';
+  try {
+    const entry = { guild_id: gid, action: 'mute', target_id: uid, mod_id: modId, reason, duration: dur, created_at: new Date().toISOString() };
+    await sbPost('mod_logs', entry);
+    await sbPost('mod_track', entry).catch(()=>{});
+    toast(`User ${uid} mute logged (${dur})`, 'success');
+  } catch(e) { toast('DB write failed: ' + e.message, 'error'); }
+  closeModal();
 }
 
 function openWarnModal() {
@@ -1826,15 +2047,19 @@ function openWarnModal() {
 }
 
 async function execWarn() {
-  const uid = document.getElementById('m-uid')?.value;
-  const reason = document.getElementById('m-reason')?.value || 'No reason';
+  const uid    = document.getElementById('m-uid')?.value?.trim();
+  const reason = document.getElementById('m-reason')?.value?.trim() || 'No reason';
   if (!uid) return toast('Enter a User ID','error');
-  if (STATE.currentGuild) {
-    try {
-      await sbPost('warnings', { guild_id: STATE.currentGuild.id, target_id: uid, reason, mod_id: STATE.user?.id||'dashboard' });
-      toast('Warning issued','success');
-    } catch(e) { toast('Saved locally','info'); }
-  }
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  const gid   = STATE.currentGuild.id;
+  const modId = STATE.user?.id || 'dashboard';
+  try {
+    await sbPost('warnings', { guild_id: gid, target_id: uid, reason, mod_id: modId, created_at: new Date().toISOString() });
+    // Also log to mod_logs
+    await sbPost('mod_logs', { guild_id: gid, action: 'warn', target_id: uid, mod_id: modId, reason, created_at: new Date().toISOString() }).catch(()=>{});
+    toast('Warning issued','success');
+    if (currentPage === 'warnings') loadWarnings();
+  } catch(e) { toast('Failed: ' + e.message,'error'); }
   closeModal();
 }
 
@@ -1869,27 +2094,27 @@ function openGiveawayModal() {
 }
 
 async function execGiveaway() {
-  const prize = document.getElementById('m-prize')?.value;
+  const prize = document.getElementById('m-prize')?.value?.trim();
   if (!prize) return toast('Enter a prize','error');
-  const dur = document.getElementById('m-dur')?.value || '24h';
-  const durMs = {'1h':3600000,'6h':21600000,'24h':86400000,'7d':604800000}[dur] || 86400000;
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  const dur    = document.getElementById('m-dur')?.value || '24h';
+  const durMs  = {'1h':3600000,'6h':21600000,'24h':86400000,'7d':604800000}[dur] || 86400000;
   const endsAt = new Date(Date.now()+durMs).toISOString();
-  if (STATE.currentGuild) {
-    try {
-      await sbPost('giveaways', {
-        guild_id: STATE.currentGuild.id,
-        prize,
-        winners: parseInt(document.getElementById('m-winners')?.value||1),
-        ends_at: endsAt,
-        ended: false,
-        host_id: STATE.user?.id||'dashboard',
-        channel_id: document.getElementById('m-ch')?.value||'0',
-        message_id: '0',
-      });
-      toast('Giveaway created!','success');
-      loadGiveaways();
-    } catch(e) { toast('Created (bot sync pending)','info'); }
-  }
+  try {
+    await sbPost('giveaways', {
+      guild_id:   STATE.currentGuild.id,
+      prize,
+      winners:    parseInt(document.getElementById('m-winners')?.value || 1),
+      ends_at:    endsAt,
+      ended:      false,
+      host_id:    STATE.user?.id || 'dashboard',
+      channel_id: document.getElementById('m-ch')?.value?.trim() || '0',
+      message_id: '0',
+      created_at: new Date().toISOString(),
+    });
+    toast('Giveaway created!','success');
+    loadGiveaways();
+  } catch(e) { toast('Failed: ' + e.message,'error'); }
   closeModal();
 }
 
@@ -1911,20 +2136,21 @@ function openTriggerModal() {
 }
 
 async function execTrigger() {
-  const trigger = document.getElementById('m-trigger')?.value;
-  const response = document.getElementById('m-resp')?.value;
+  const trigger  = document.getElementById('m-trigger')?.value?.trim();
+  const response = document.getElementById('m-resp')?.value?.trim();
   if (!trigger || !response) return toast('Fill all fields','error');
-  if (STATE.currentGuild) {
-    try {
-      await sbPost('autoresponder_triggers', {
-        guild_id: STATE.currentGuild.id,
-        trigger, response,
-        match_mode: document.getElementById('m-mode')?.value||'contains',
-      });
-      toast('Trigger created','success');
-      loadTriggers();
-    } catch(e) { toast('Saved','info'); }
-  }
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  try {
+    await sbPost('autoresponders', {
+      guild_id:   STATE.currentGuild.id,
+      trigger,
+      response,
+      match_mode: document.getElementById('m-mode')?.value || 'contains',
+      created_at: new Date().toISOString(),
+    });
+    toast('Trigger created','success');
+    loadTriggers();
+  } catch(e) { toast('Failed: ' + e.message,'error'); }
   closeModal();
 }
 
@@ -1940,19 +2166,21 @@ function openNoteModal() {
 }
 
 async function execNote() {
-  const uid = document.getElementById('m-uid')?.value;
-  const note = document.getElementById('m-note')?.value;
+  const uid  = document.getElementById('m-uid')?.value?.trim();
+  const note = document.getElementById('m-note')?.value?.trim();
   if (!uid || !note) return toast('Fill all fields','error');
-  if (STATE.currentGuild) {
-    try {
-      await sbPost('staff_notes', {
-        guild_id: STATE.currentGuild.id, target_id: uid, note,
-        mod_id: STATE.user?.id||'dashboard',
-      });
-      toast('Note added','success');
-      loadNotes();
-    } catch(e) { toast('Note saved','info'); }
-  }
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  try {
+    await sbPost('staff_notes', {
+      guild_id: STATE.currentGuild.id,
+      target_id: uid,
+      note,
+      mod_id: STATE.user?.id || 'dashboard',
+      created_at: new Date().toISOString(),
+    });
+    toast('Note added','success');
+    if (currentPage === 'notes') loadNotes();
+  } catch(e) { toast('Failed: ' + e.message,'error'); }
   closeModal();
 }
 
@@ -1968,9 +2196,20 @@ function openRoleModal() {
 }
 
 async function execRolePanel() {
-  const title = document.getElementById('m-title')?.value;
+  const title = document.getElementById('m-title')?.value?.trim();
+  const chId  = document.getElementById('m-ch')?.value?.trim();
   if (!title) return toast('Enter a title','error');
-  toast('Panel created (use bot commands to add roles)','info');
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  try {
+    await sbPost('rr_panels', {
+      guild_id:   STATE.currentGuild.id,
+      title,
+      channel_id: chId || '0',
+      created_at: new Date().toISOString(),
+    });
+    toast('Panel created','success');
+    loadRolePanels();
+  } catch(e) { toast('Failed: ' + e.message,'error'); }
   closeModal();
 }
 
