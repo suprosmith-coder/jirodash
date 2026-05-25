@@ -1094,8 +1094,9 @@ async function sbGet(table, params = {}) {
   const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
   Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
   const r = await fetch(url, { headers: sbHeaders() });
-  if (!r.ok) return [];
-  return r.json();
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.message || data?.hint || data?.error || `GET ${table} ${r.status}`);
+  return data;
 }
 
 async function sbPost(table, body) {
@@ -1146,12 +1147,45 @@ function sbHeaders() {
   return { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 }
 
+async function probeTableMode(table) {
+  // Ask PostgREST for the table schema via the root endpoint
+  // GET /rest/v1/ returns OpenAPI spec with all table definitions
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: sbHeaders() });
+    if (r.ok) {
+      const spec = await r.json();
+      const def = spec?.definitions?.[table];
+      if (def?.properties) {
+        const cols = Object.keys(def.properties);
+        // If table has 'key' and 'value' columns it's kv, otherwise columns-based
+        return (cols.includes('key') && cols.includes('value')) ? 'kv' : 'columns';
+      }
+    }
+  } catch(e) { console.warn(e.message); }
+
+  // Fallback: fetch one row from anywhere in the table (no guild filter)
+  try {
+    const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+    url.searchParams.set('limit', '1');
+    const r = await fetch(url, { headers: sbHeaders() });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows.length > 0) {
+      return ('key' in rows[0] && 'value' in rows[0]) ? 'kv' : 'columns';
+    }
+  } catch(e) { console.warn(e.message); }
+
+  // Table exists but completely empty — default to columns (safer for guild_configs)
+  return 'columns';
+}
+
 async function loadGuildConfig() {
   if (!STATE.currentGuild) return;
   const gid = STATE.currentGuild.id;
 
   for (const table of ['guild_configs', 'guild_config']) {
     try {
+      // Fetch rows for this guild
       const rows = await sbGet(table, { guild_id: `eq.${gid}` });
       if (!Array.isArray(rows)) continue;
 
@@ -1168,11 +1202,13 @@ async function loadGuildConfig() {
           Object.assign(STATE.guildConfig, sample);
         }
       } else {
-        STATE._configMode = 'kv';
+        // Table is empty for this guild — probe any row in the table to get column shape
+        const mode = await probeTableMode(table);
+        STATE._configMode = (mode === 'unknown' || mode === null) ? 'columns' : mode;
       }
       applyConfigToUI();
       return;
-    } catch(e) {}
+    } catch(e) { console.warn(e.message); }
   }
 }
 
@@ -1237,44 +1273,53 @@ function setVal(id, val) {
 
 async function saveSetting(key, value) {
   if (!STATE.currentGuild) return;
-  const gid   = STATE.currentGuild.id;
+  const gid = STATE.currentGuild.id;
+
+  // If we don't know the table/mode yet, probe now
+  if (!STATE._configTable) await loadGuildConfig();
   const table = STATE._configTable || 'guild_configs';
-  const mode  = STATE._configMode  || 'kv';
+  const mode  = STATE._configMode  || 'columns';
 
   try {
     if (mode === 'columns') {
-      // Single row per guild — PATCH the column, INSERT if no row exists
-      const existing = await sbGet(table, { guild_id: `eq.${gid}`, select: 'guild_id' });
-      if (existing.length) {
-        await sbPatch(table, { guild_id: `eq.${gid}` }, { [key]: String(value) });
-      } else {
-        await sbPost(table, { guild_id: gid, [key]: String(value) });
-      }
+      // One row per guild with column-per-setting — upsert by guild_id
+      await sbUpsert(table, { guild_id: gid, [key]: String(value) }, 'guild_id');
     } else {
-      // Key-value table — upsert on (guild_id, key)
+      // Key-value rows — upsert on (guild_id, key)
       await sbUpsert(table, { guild_id: gid, key, value: String(value) }, 'guild_id,key');
     }
     STATE.guildConfig[key] = value;
     toast('Saved', 'success');
   } catch(e) {
-    // Upsert may fail if no unique constraint; fall back to GET + POST/PATCH
+    // Upsert failed — try plain PATCH then POST
     try {
-      const existing = await sbGet(table, { guild_id: `eq.${gid}`, key: `eq.${key}` });
-      if (existing.length) {
-        await sbPatch(table, { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
+      if (mode === 'columns') {
+        const existing = await sbGet(table, { guild_id: `eq.${gid}`, select: 'guild_id' });
+        if (existing.length) {
+          await sbPatch(table, { guild_id: `eq.${gid}` }, { [key]: String(value) });
+        } else {
+          await sbPost(table, { guild_id: gid, [key]: String(value) });
+        }
       } else {
-        await sbPost(table, { guild_id: gid, key, value: String(value) });
+        const existing = await sbGet(table, { guild_id: `eq.${gid}`, key: `eq.${key}` });
+        if (existing.length) {
+          await sbPatch(table, { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
+        } else {
+          await sbPost(table, { guild_id: gid, key, value: String(value) });
+        }
       }
       STATE.guildConfig[key] = value;
       toast('Saved', 'success');
     } catch(e2) {
       toast('Save failed: ' + (e2.message || e.message), 'error');
-      console.error('saveSetting:', key, e.message, e2.message);
+      console.error('saveSetting error:', { key, value, table, mode }, e.message, e2.message);
     }
   }
 }
 
 async function saveMany(settings) {
+  // Ensure config mode is detected before batch saving
+  if (!STATE._configTable) await loadGuildConfig();
   for (const [key, value] of Object.entries(settings)) {
     await saveSetting(key, value);
   }
@@ -1441,7 +1486,7 @@ async function loadLogsInto(containerId, limit = 12) {
       order:    'created_at.desc',
       limit:    String(limit),
     });
-  } catch(e) {}
+  } catch(e) { console.warn(e.message); }
 
   // Fallback: mod_track
   if (!logs.length) {
@@ -1451,7 +1496,7 @@ async function loadLogsInto(containerId, limit = 12) {
         order:    'created_at.desc',
         limit:    String(limit),
       });
-    } catch(e) {}
+    } catch(e) { console.warn(e.message); }
   }
 
   // Fallback: modtrack (alternate table name)
@@ -1462,7 +1507,7 @@ async function loadLogsInto(containerId, limit = 12) {
         order:    'created_at.desc',
         limit:    String(limit),
       });
-    } catch(e) {}
+    } catch(e) { console.warn(e.message); }
   }
 
   if (!logs.length) {
@@ -1512,7 +1557,7 @@ async function loadLeaderboard(containerId, limit = 10) {
         order:    'xp.desc',
         limit:    String(limit),
       });
-    } catch(e) {}
+    } catch(e) { console.warn(e.message); }
   }
 
   if (!rows.length) {
@@ -1551,7 +1596,7 @@ async function loadGiveawaysInto(containerId) {
         order:    'created_at.desc',
         limit:    '5',
       });
-    } catch(e) {}
+    } catch(e) { console.warn(e.message); }
   }
 
   if (!rows.length) {
@@ -1582,7 +1627,7 @@ async function loadGiveaways() {
         guild_id: `eq.${STATE.currentGuild.id}`,
         ended: 'eq.true', order: 'created_at.desc', limit: '10'
       });
-    } catch(e) {}
+    } catch(e) { console.warn(e.message); }
   }
   if (!ended.length) {
     endedEl.innerHTML = `<div class="empty"><i class="fa fa-flag-checkered"></i><p>No ended giveaways yet</p></div>`;
@@ -1623,7 +1668,7 @@ async function loadWarnings() {
       order:    'created_at.desc',
       limit:    '50',
     });
-  } catch(e) {}
+  } catch(e) { console.warn(e.message); }
   if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-circle-check"></i><p>No warnings recorded</p></div>`; return; }
   el.innerHTML = rows.map(w => `
     <div class="warn-item">
@@ -1657,7 +1702,7 @@ async function searchWarnings() {
     const params = { guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '30' };
     if (q) params.target_id = `eq.${q}`;
     rows = await sbGet('warnings', params);
-  } catch(e) {}
+  } catch(e) { console.warn(e.message); }
   if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-circle-check"></i><p>No warnings found${q ? ' for '+q : ''}</p></div>`; return; }
   el.innerHTML = rows.map(w => `
     <div class="warn-item">
@@ -1683,7 +1728,7 @@ async function searchNotes() {
     const params = { guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '20' };
     if (q) params.target_id = `eq.${q}`;
     rows = await sbGet('staff_notes', params);
-  } catch(e) {}
+  } catch(e) { console.warn(e.message); }
   if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-note-sticky"></i><p>No notes found${q ? ' for '+q : ''}</p></div>`; return; }
   el.innerHTML = `<table><thead><tr><th>User ID</th><th>Note</th><th>Added</th><th>By</th><th></th></tr></thead><tbody>` +
     rows.map(r => `<tr>
@@ -1816,7 +1861,7 @@ async function loadShop() {
   if (STATE.currentGuild) {
     try {
       rows = await sbGet('shop_items', { guild_id: `eq.${STATE.currentGuild.id}`, order: 'price.asc', limit: '20' });
-    } catch(e) {}
+    } catch(e) { console.warn(e.message); }
   }
   if (!rows.length) {
     el.innerHTML = `<div class="empty"><i class="fa fa-store"></i><p>No shop items yet</p></div>`;
@@ -1892,7 +1937,7 @@ async function loadTriggers() {
   if (STATE.currentGuild) {
     try {
       rows = await sbGet('autoresponders', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '20' });
-    } catch(e) {}
+    } catch(e) { console.warn(e.message); }
   }
   if (!rows.length) {
     el.innerHTML = `<div class="empty"><i class="fa fa-comment-dots"></i><p>No triggers configured yet</p></div>`;
@@ -1924,7 +1969,7 @@ async function loadNotes() {
   let rows = [];
   try {
     rows = await sbGet('staff_notes', { guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '30' });
-  } catch(e) {}
+  } catch(e) { console.warn(e.message); }
   if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-note-sticky"></i><p>No staff notes yet</p></div>`; return; }
   el.innerHTML = `<table><thead><tr><th>User ID</th><th>Note</th><th>Added</th><th>By</th><th></th></tr></thead><tbody>` +
     rows.map(r => `<tr>
@@ -1953,7 +1998,7 @@ async function loadRolePanels() {
   if (STATE.currentGuild) {
     try {
       rows = await sbGet('rr_panels', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '20' });
-    } catch(e) {}
+    } catch(e) { console.warn(e.message); }
   }
   if (!rows.length) {
     el.innerHTML = `<div class="empty"><i class="fa fa-tags"></i><p>No role panels set up yet</p></div>`;
