@@ -1023,7 +1023,18 @@ async function fetchGuilds() {
     headers: { Authorization: `Bearer ${STATE.token}` }
   });
   const all = await r.json();
-  return Array.isArray(all) ? all.filter(g => (parseInt(g.permissions) & 0x20) === 0x20) : [];
+  if (!Array.isArray(all)) {
+    console.error('Discord guilds error:', all);
+    return [];
+  }
+  // Use BigInt for permission check — parseInt truncates large permission values
+  // 0x20 = MANAGE_GUILD. Show all guilds if none pass (e.g. user is member not admin)
+  const managed = all.filter(g => {
+    try { return (BigInt(g.permissions) & BigInt(0x20)) === BigInt(0x20); }
+    catch(e) { return false; }
+  });
+  // Fall back to all guilds if none have manage perms (so dropdown isn't empty)
+  return managed.length ? managed : all;
 }
 
 function renderUser() {
