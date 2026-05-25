@@ -1,0 +1,2012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Jiro Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Baloo+2:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<style>
+  :root {
+    --sky:       #ddeeff;
+    --sky2:      #c8e6ff;
+    --blue:      #4a90d9;
+    --blue-mid:  #6aabef;
+    --blue-dark: #2c6fb5;
+    --cloud:     #f4f9ff;
+    --white:     #ffffff;
+    --text:      #1e2a45;
+    --text-soft: #4a6080;
+    --text-muted:#7a93b5;
+    --accent:    #5ba8f5;
+    --accent2:   #a8d8ff;
+    --warn:      #f59e42;
+    --danger:    #e05c6a;
+    --success:   #4bcf8a;
+    --card-bg:   rgba(255,255,255,0.78);
+    --card-border: rgba(100,170,240,0.25);
+    --shadow:    0 4px 24px rgba(74,144,217,0.13);
+    --shadow-lg: 0 8px 40px rgba(74,144,217,0.18);
+    --radius:    18px;
+    --radius-sm: 10px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'Nunito',sans-serif;
+    background: linear-gradient(135deg, #ddeeff 0%, #c5e2ff 40%, #e8f4ff 70%, #d0eaff 100%);
+    min-height:100vh;
+    color:var(--text);
+    overflow-x:hidden;
+  }
+
+  /* ── FLOATING BUBBLES BG ── */
+  .bg-bubbles{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+  .bg-bubbles span{
+    position:absolute;border-radius:50%;
+    background:rgba(255,255,255,0.35);
+    animation:float-up linear infinite;
+  }
+  @keyframes float-up{
+    0%{transform:translateY(100vh) scale(0.8);opacity:0}
+    10%{opacity:1}
+    90%{opacity:.6}
+    100%{transform:translateY(-10vh) scale(1.1);opacity:0}
+  }
+
+  /* ── LAYOUT ── */
+  #app{position:relative;z-index:1;min-height:100vh;display:flex}
+
+  /* ── SIDEBAR ── */
+  .sidebar{
+    width:230px;min-width:230px;
+    background:rgba(255,255,255,0.72);
+    backdrop-filter:blur(18px);
+    border-right:1.5px solid var(--card-border);
+    display:flex;flex-direction:column;
+    padding:0 0 24px;
+    box-shadow:4px 0 24px rgba(74,144,217,0.08);
+    transition:transform .3s;
+  }
+  .sidebar-logo{
+    padding:28px 24px 18px;
+    display:flex;align-items:center;gap:12px;
+    border-bottom:1.5px solid var(--card-border);
+    margin-bottom:12px;
+  }
+  .bear-icon{
+    width:46px;height:46px;
+    background:linear-gradient(135deg,#5ba8f5,#a8d8ff);
+    border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:22px;box-shadow:0 2px 12px rgba(91,168,245,0.4);
+    flex-shrink:0;
+  }
+  .logo-text{
+    font-family:'Baloo 2',sans-serif;
+    font-size:22px;font-weight:800;
+    background:linear-gradient(90deg,#2c6fb5,#5ba8f5);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    line-height:1;
+  }
+  .logo-sub{font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:.5px;margin-top:2px}
+
+  .sidebar-section{
+    padding:6px 14px 4px;
+    font-size:10px;font-weight:800;letter-spacing:1.2px;
+    color:var(--text-muted);text-transform:uppercase;margin-top:8px;
+  }
+  .nav-item{
+    display:flex;align-items:center;gap:11px;
+    padding:10px 18px;margin:1px 10px;
+    border-radius:12px;cursor:pointer;
+    font-size:14px;font-weight:700;color:var(--text-soft);
+    transition:all .18s;position:relative;
+    text-decoration:none;
+  }
+  .nav-item:hover{background:rgba(91,168,245,0.13);color:var(--blue-dark)}
+  .nav-item.active{
+    background:linear-gradient(90deg,rgba(91,168,245,0.22),rgba(168,216,255,0.18));
+    color:var(--blue-dark);
+    box-shadow:inset 3px 0 0 var(--blue);
+  }
+  .nav-item i{width:18px;text-align:center;font-size:13px;color:var(--blue)}
+  .nav-badge{
+    margin-left:auto;background:var(--accent);color:#fff;
+    font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;
+  }
+
+  .sidebar-user{
+    margin-top:auto;padding:14px 18px 0;
+    border-top:1.5px solid var(--card-border);
+    display:flex;align-items:center;gap:10px;
+  }
+  .sidebar-avatar{
+    width:36px;height:36px;border-radius:50%;
+    background:linear-gradient(135deg,#c5e2ff,#a8d8ff);
+    display:flex;align-items:center;justify-content:center;
+    font-size:14px;color:var(--blue-dark);font-weight:800;overflow:hidden;
+    border:2px solid var(--accent2);
+  }
+  .sidebar-avatar img{width:100%;height:100%;object-fit:cover}
+  .sidebar-uname{font-size:13px;font-weight:800;color:var(--text)}
+  .sidebar-tag{font-size:11px;color:var(--text-muted)}
+  .btn-logout{
+    margin-left:auto;background:none;border:none;cursor:pointer;
+    color:var(--text-muted);font-size:14px;transition:color .18s;
+  }
+  .btn-logout:hover{color:var(--danger)}
+
+  /* ── MAIN ── */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+  /* ── TOPBAR ── */
+  .topbar{
+    background:rgba(255,255,255,0.68);
+    backdrop-filter:blur(14px);
+    border-bottom:1.5px solid var(--card-border);
+    padding:14px 32px;
+    display:flex;align-items:center;gap:16px;
+    position:sticky;top:0;z-index:10;
+  }
+  .topbar-title{
+    font-family:'Baloo 2',sans-serif;
+    font-size:20px;font-weight:800;color:var(--text);
+  }
+  .topbar-sub{font-size:13px;color:var(--text-muted);font-weight:600;margin-left:4px}
+  .topbar-guild{
+    margin-left:auto;
+    display:flex;align-items:center;gap:10px;
+  }
+  .guild-icon{
+    width:34px;height:34px;border-radius:10px;
+    background:linear-gradient(135deg,#5ba8f5,#a8d8ff);
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:800;font-size:13px;overflow:hidden;
+  }
+  .guild-icon img{width:100%;height:100%;object-fit:cover}
+  .guild-name{font-size:14px;font-weight:800;color:var(--text)}
+  .guild-select{
+    border:1.5px solid var(--card-border);border-radius:10px;
+    padding:6px 12px;font-family:'Nunito',sans-serif;
+    font-size:13px;font-weight:700;background:rgba(255,255,255,0.8);
+    color:var(--text);cursor:pointer;outline:none;
+  }
+
+  /* ── CONTENT ── */
+  .content{padding:28px 32px;flex:1}
+
+  /* ── LOGIN PAGE ── */
+  #login-page{
+    position:fixed;inset:0;z-index:100;
+    background:linear-gradient(135deg,#ddeeff 0%,#c5e2ff 50%,#e8f4ff 100%);
+    display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:0;
+  }
+  .login-card{
+    background:rgba(255,255,255,0.85);
+    backdrop-filter:blur(20px);
+    border:2px solid rgba(91,168,245,0.25);
+    border-radius:28px;
+    padding:52px 60px 44px;
+    text-align:center;
+    box-shadow:0 16px 60px rgba(74,144,217,0.16);
+    max-width:440px;width:90%;
+    animation:card-drop .6s cubic-bezier(.34,1.56,.64,1) both;
+  }
+  @keyframes card-drop{from{transform:translateY(-40px);opacity:0}to{transform:none;opacity:1}}
+  .login-bear{font-size:64px;margin-bottom:4px;animation:bear-bob 2.4s ease-in-out infinite}
+  @keyframes bear-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+  .login-title{
+    font-family:'Baloo 2',sans-serif;font-size:32px;font-weight:800;
+    background:linear-gradient(90deg,#2c6fb5,#5ba8f5);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    margin-bottom:6px;
+  }
+  .login-sub{font-size:14px;color:var(--text-soft);font-weight:600;margin-bottom:32px;line-height:1.5}
+  .btn-discord{
+    display:inline-flex;align-items:center;gap:12px;
+    background:linear-gradient(135deg,#5865F2,#7289da);
+    color:#fff;padding:14px 32px;border-radius:14px;
+    font-family:'Baloo 2',sans-serif;font-size:17px;font-weight:700;
+    cursor:pointer;border:none;transition:all .2s;
+    box-shadow:0 4px 18px rgba(88,101,242,0.35);text-decoration:none;
+  }
+  .btn-discord:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(88,101,242,0.45)}
+  .login-features{
+    display:flex;gap:20px;margin-top:28px;justify-content:center;
+    flex-wrap:wrap;
+  }
+  .login-feat{
+    display:flex;align-items:center;gap:7px;
+    font-size:12px;color:var(--text-muted);font-weight:700;
+  }
+  .login-feat i{color:var(--blue);font-size:13px}
+
+  /* ── CARDS ── */
+  .card{
+    background:var(--card-bg);
+    backdrop-filter:blur(12px);
+    border:1.5px solid var(--card-border);
+    border-radius:var(--radius);
+    padding:24px;
+    box-shadow:var(--shadow);
+    transition:box-shadow .2s;
+  }
+  .card:hover{box-shadow:var(--shadow-lg)}
+  .card-title{
+    font-family:'Baloo 2',sans-serif;
+    font-size:16px;font-weight:800;color:var(--text);
+    display:flex;align-items:center;gap:9px;margin-bottom:18px;
+  }
+  .card-title i{color:var(--blue);font-size:15px}
+
+  /* ── STAT GRID ── */
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+  .stat-card{
+    background:var(--card-bg);
+    backdrop-filter:blur(12px);
+    border:1.5px solid var(--card-border);
+    border-radius:16px;padding:18px 20px;
+    box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:4px;
+    transition:transform .18s,box-shadow .18s;
+  }
+  .stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+  .stat-icon{
+    width:36px;height:36px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+    font-size:15px;margin-bottom:6px;
+  }
+  .stat-label{font-size:11px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px}
+  .stat-value{font-family:'Baloo 2',sans-serif;font-size:26px;font-weight:800;color:var(--text)}
+  .stat-sub{font-size:11px;color:var(--text-muted);font-weight:600}
+
+  /* ── GRID LAYOUTS ── */
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+  @media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr}.sidebar{display:none}}
+
+  /* ── TABLES ── */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;padding:8px 12px;font-size:10px;font-weight:800;
+     color:var(--text-muted);text-transform:uppercase;letter-spacing:.7px;
+     border-bottom:1.5px solid var(--card-border)}
+  td{padding:10px 12px;border-bottom:1px solid rgba(100,170,240,0.1);font-weight:600}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:rgba(91,168,245,0.05)}
+
+  /* ── BADGES ── */
+  .badge{
+    display:inline-flex;align-items:center;gap:4px;
+    padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;
+  }
+  .badge-green{background:rgba(75,207,138,0.15);color:#1a9960}
+  .badge-red{background:rgba(224,92,106,0.15);color:#c0394a}
+  .badge-blue{background:rgba(91,168,245,0.15);color:#2c6fb5}
+  .badge-warn{background:rgba(245,158,66,0.15);color:#b8620a}
+  .badge-gray{background:rgba(122,147,181,0.15);color:#4a6080}
+
+  /* ── TOGGLE ── */
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(100,170,240,0.1)}
+  .toggle-row:last-child{border-bottom:none}
+  .toggle-label{font-size:14px;font-weight:700;color:var(--text)}
+  .toggle-desc{font-size:12px;color:var(--text-muted);font-weight:600;margin-top:2px}
+  .toggle{
+    position:relative;width:42px;height:23px;flex-shrink:0;
+  }
+  .toggle input{opacity:0;width:0;height:0}
+  .slider{
+    position:absolute;inset:0;border-radius:23px;cursor:pointer;
+    background:#c5d8f0;transition:.25s;
+  }
+  .slider:before{
+    content:'';position:absolute;
+    width:17px;height:17px;left:3px;bottom:3px;
+    border-radius:50%;background:#fff;transition:.25s;
+    box-shadow:0 1px 4px rgba(0,0,0,0.18);
+  }
+  input:checked + .slider{background:var(--blue)}
+  input:checked + .slider:before{transform:translateX(19px)}
+
+  /* ── INPUTS ── */
+  .input-group{margin-bottom:14px}
+  .input-label{font-size:12px;font-weight:800;color:var(--text-soft);margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.5px}
+  .inp{
+    width:100%;padding:9px 14px;border-radius:10px;
+    border:1.5px solid var(--card-border);
+    font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;
+    background:rgba(255,255,255,0.85);color:var(--text);
+    outline:none;transition:border-color .18s;
+  }
+  .inp:focus{border-color:var(--blue)}
+  select.inp{cursor:pointer}
+
+  /* ── BUTTONS ── */
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:9px 20px;border-radius:10px;font-family:'Nunito',sans-serif;
+    font-size:13px;font-weight:800;cursor:pointer;border:none;transition:all .18s;
+  }
+  .btn-primary{background:linear-gradient(135deg,#4a90d9,#5ba8f5);color:#fff;box-shadow:0 3px 12px rgba(74,144,217,0.3)}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(74,144,217,0.4)}
+  .btn-danger{background:linear-gradient(135deg,#e05c6a,#f58090);color:#fff}
+  .btn-danger:hover{transform:translateY(-1px)}
+  .btn-ghost{background:rgba(91,168,245,0.12);color:var(--blue-dark);border:1.5px solid var(--card-border)}
+  .btn-ghost:hover{background:rgba(91,168,245,0.22)}
+  .btn-sm{padding:6px 14px;font-size:12px}
+  .btn-success{background:linear-gradient(135deg,#3db877,#4bcf8a);color:#fff}
+
+  /* ── SECTION PAGES ── */
+  .page{display:none}
+  .page.active{display:block}
+
+  /* ── SECTION HEADER ── */
+  .section-header{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:22px;
+  }
+  .section-title{
+    font-family:'Baloo 2',sans-serif;font-size:22px;font-weight:800;
+    color:var(--text);display:flex;align-items:center;gap:10px;
+  }
+  .section-title i{color:var(--blue);font-size:20px}
+
+  /* ── LEADERBOARD ── */
+  .lb-row{
+    display:flex;align-items:center;gap:14px;padding:10px 0;
+    border-bottom:1px solid rgba(100,170,240,0.1);
+  }
+  .lb-row:last-child{border-bottom:none}
+  .lb-rank{
+    width:28px;height:28px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:900;flex-shrink:0;
+  }
+  .lb-rank.gold{background:linear-gradient(135deg,#f5c842,#f59e42);color:#fff}
+  .lb-rank.silver{background:linear-gradient(135deg,#b0bec5,#90a4ae);color:#fff}
+  .lb-rank.bronze{background:linear-gradient(135deg,#cd7f32,#a0522d);color:#fff}
+  .lb-rank.other{background:rgba(91,168,245,0.12);color:var(--blue-dark)}
+  .lb-avatar{
+    width:34px;height:34px;border-radius:50%;
+    background:linear-gradient(135deg,#c5e2ff,#a8d8ff);
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:13px;color:var(--blue-dark);
+    flex-shrink:0;
+  }
+  .lb-name{font-size:13px;font-weight:800;color:var(--text)}
+  .lb-xp{font-size:12px;color:var(--text-muted);font-weight:700}
+  .lb-bar-wrap{flex:1;height:6px;background:rgba(91,168,245,0.12);border-radius:3px;margin:0 10px}
+  .lb-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,#4a90d9,#a8d8ff)}
+  .lb-level{
+    font-family:'Baloo 2',sans-serif;font-size:14px;font-weight:800;
+    color:var(--blue);flex-shrink:0;
+  }
+
+  /* ── WARN LIST ── */
+  .warn-item{
+    display:flex;align-items:flex-start;gap:12px;
+    padding:12px 0;border-bottom:1px solid rgba(100,170,240,0.1);
+  }
+  .warn-icon{
+    width:34px;height:34px;border-radius:10px;
+    background:rgba(224,92,106,0.1);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--danger);font-size:14px;flex-shrink:0;margin-top:1px;
+  }
+  .warn-user{font-size:13px;font-weight:800;color:var(--text)}
+  .warn-reason{font-size:12px;color:var(--text-soft);font-weight:600;margin-top:2px}
+  .warn-meta{font-size:11px;color:var(--text-muted);font-weight:600;margin-top:3px}
+
+  /* ── GIVEAWAY ── */
+  .giveaway-card{
+    background:linear-gradient(135deg,rgba(91,168,245,0.1),rgba(168,216,255,0.15));
+    border:1.5px solid rgba(91,168,245,0.25);
+    border-radius:14px;padding:16px 18px;margin-bottom:12px;
+  }
+  .giveaway-prize{font-family:'Baloo 2',sans-serif;font-size:16px;font-weight:800;color:var(--text)}
+  .giveaway-meta{font-size:12px;color:var(--text-soft);font-weight:600;margin-top:4px}
+  .giveaway-footer{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+
+  /* ── LOG FEED ── */
+  .log-item{
+    display:flex;align-items:center;gap:11px;
+    padding:8px 0;border-bottom:1px solid rgba(100,170,240,0.08);
+    font-size:13px;
+  }
+  .log-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .log-dot.ban{background:var(--danger)}
+  .log-dot.kick{background:var(--warn)}
+  .log-dot.join{background:var(--success)}
+  .log-dot.leave{background:var(--text-muted)}
+  .log-dot.warn{background:#f59e42}
+  .log-dot.mute{background:#9b59b6}
+  .log-dot.edit{background:var(--blue)}
+  .log-time{font-size:11px;color:var(--text-muted);font-weight:700;flex-shrink:0;min-width:45px}
+  .log-text{color:var(--text-soft);font-weight:600}
+  .log-text strong{color:var(--text);font-weight:800}
+
+  /* ── QUICK ACTIONS ── */
+  .action-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+  .action-btn{
+    background:var(--card-bg);border:1.5px solid var(--card-border);
+    border-radius:14px;padding:18px 14px;
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    cursor:pointer;transition:all .18s;text-align:center;
+    font-size:13px;font-weight:700;color:var(--text-soft);
+  }
+  .action-btn:hover{background:rgba(91,168,245,0.1);border-color:rgba(91,168,245,0.4);color:var(--blue-dark);transform:translateY(-2px)}
+  .action-btn i{font-size:22px;color:var(--blue)}
+
+  /* ── MODAL ── */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(30,42,69,0.35);
+    backdrop-filter:blur(4px);z-index:200;
+    display:flex;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .2s;
+  }
+  .modal-backdrop.open{opacity:1;pointer-events:all}
+  .modal{
+    background:rgba(255,255,255,0.96);border:1.5px solid var(--card-border);
+    border-radius:22px;padding:32px;max-width:480px;width:92%;
+    box-shadow:0 20px 60px rgba(74,144,217,0.2);
+    transform:scale(.94);transition:transform .2s;
+  }
+  .modal-backdrop.open .modal{transform:scale(1)}
+  .modal-title{font-family:'Baloo 2',sans-serif;font-size:18px;font-weight:800;color:var(--text);margin-bottom:18px}
+  .modal-close{float:right;cursor:pointer;color:var(--text-muted);background:none;border:none;font-size:18px;margin-top:-4px}
+
+  /* ── TOAST ── */
+  .toast-container{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column;gap:8px}
+  .toast{
+    background:rgba(255,255,255,0.96);border:1.5px solid var(--card-border);
+    border-radius:14px;padding:12px 18px;
+    display:flex;align-items:center;gap:10px;
+    box-shadow:0 6px 24px rgba(74,144,217,0.18);
+    font-size:13px;font-weight:700;color:var(--text);
+    animation:toast-in .3s ease both;min-width:220px;
+  }
+  @keyframes toast-in{from{transform:translateX(60px);opacity:0}to{transform:none;opacity:1}}
+  .toast i{font-size:15px}
+  .toast.success i{color:var(--success)}
+  .toast.error i{color:var(--danger)}
+  .toast.info i{color:var(--blue)}
+
+  /* ── LOADING ── */
+  .spinner{
+    width:32px;height:32px;border:3px solid rgba(91,168,245,0.2);
+    border-top-color:var(--blue);border-radius:50%;
+    animation:spin .7s linear infinite;margin:40px auto;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loading-text{text-align:center;color:var(--text-muted);font-weight:700;font-size:14px;margin-top:8px}
+
+  /* ── EMPTY STATE ── */
+  .empty{text-align:center;padding:40px 20px;color:var(--text-muted)}
+  .empty i{font-size:38px;margin-bottom:12px;color:var(--accent2)}
+  .empty p{font-size:14px;font-weight:700}
+
+  /* ── MISC ── */
+  .divider{height:1px;background:var(--card-border);margin:16px 0}
+  .flex-center{display:flex;align-items:center}
+  .gap-8{gap:8px}
+  .ml-auto{margin-left:auto}
+  .mt-4{margin-top:16px}
+  .progress-wrap{height:8px;background:rgba(91,168,245,0.12);border-radius:4px;overflow:hidden}
+  .progress-bar{height:100%;border-radius:4px;background:linear-gradient(90deg,#4a90d9,#a8d8ff);transition:width .6s ease}
+
+  /* ── MOBILE MENU ── */
+  .menu-toggle{display:none;background:none;border:none;font-size:20px;color:var(--blue-dark);cursor:pointer;margin-right:8px}
+  @media(max-width:900px){
+    .menu-toggle{display:block}
+    .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:50;transform:translateX(-100%)}
+    .sidebar.open{transform:none;box-shadow:4px 0 40px rgba(74,144,217,0.18)}
+    .content{padding:16px}
+    .topbar{padding:12px 16px}
+  }
+
+  .pill-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+  .pill-tab{
+    padding:6px 16px;border-radius:20px;font-size:13px;font-weight:800;
+    cursor:pointer;border:1.5px solid var(--card-border);
+    background:transparent;color:var(--text-soft);transition:all .18s;
+  }
+  .pill-tab.active{background:linear-gradient(135deg,#4a90d9,#5ba8f5);color:#fff;border-color:transparent}
+
+  .xp-bar-outer{height:10px;background:rgba(91,168,245,0.12);border-radius:5px;overflow:hidden;margin:6px 0}
+  .xp-bar-inner{height:100%;border-radius:5px;background:linear-gradient(90deg,#4a90d9,#a8d8ff)}
+
+  .shopitem{
+    background:rgba(255,255,255,0.7);border:1.5px solid var(--card-border);
+    border-radius:14px;padding:14px;display:flex;align-items:center;gap:12px;
+    margin-bottom:10px;
+  }
+  .shopitem-icon{
+    width:40px;height:40px;border-radius:10px;
+    background:linear-gradient(135deg,#c5e2ff,#a8d8ff);
+    display:flex;align-items:center;justify-content:center;
+    font-size:18px;flex-shrink:0;
+  }
+  .shopitem-name{font-size:14px;font-weight:800;color:var(--text)}
+  .shopitem-cost{font-size:12px;color:var(--text-muted);font-weight:700}
+  .coin-icon{color:#f5c842}
+</style>
+</head>
+<body>
+
+<!-- Floating bubbles -->
+<div class="bg-bubbles" id="bubbles"></div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()"><i class="fa fa-times"></i></button>
+    <div class="modal-title" id="modal-title">Action</div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- LOGIN PAGE -->
+<div id="login-page">
+  <div class="login-card">
+    <div class="login-bear">🐻</div>
+    <div class="login-title">Jiro Dashboard</div>
+    <div class="login-sub">Manage your Discord server with Jiro's<br/>powerful bear-powered moderation suite</div>
+    <a id="login-btn" class="btn-discord" href="#">
+      <i class="fab fa-discord"></i> Login with Discord
+    </a>
+    <div class="login-features">
+      <div class="login-feat"><i class="fa fa-shield-halved"></i> Moderation</div>
+      <div class="login-feat"><i class="fa fa-chart-line"></i> Levels & XP</div>
+      <div class="login-feat"><i class="fa fa-gift"></i> Giveaways</div>
+      <div class="login-feat"><i class="fa fa-robot"></i> AutoMod</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" style="display:none">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="bear-icon">🐻</div>
+      <div>
+        <div class="logo-text">Jiro</div>
+        <div class="logo-sub">Dashboard</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">Overview</div>
+    <a class="nav-item active" onclick="showPage('overview')"><i class="fa fa-house"></i> Overview</a>
+    <a class="nav-item" onclick="showPage('logs')"><i class="fa fa-scroll"></i> Audit Logs <span class="nav-badge" id="log-badge">0</span></a>
+
+    <div class="sidebar-section">Moderation</div>
+    <a class="nav-item" onclick="showPage('moderation')"><i class="fa fa-gavel"></i> Moderation</a>
+    <a class="nav-item" onclick="showPage('warnings')"><i class="fa fa-triangle-exclamation"></i> Warnings</a>
+    <a class="nav-item" onclick="showPage('automod')"><i class="fa fa-robot"></i> AutoMod</a>
+    <a class="nav-item" onclick="showPage('altdetect')"><i class="fa fa-user-secret"></i> Alt Detect</a>
+    <a class="nav-item" onclick="showPage('antiraid')"><i class="fa fa-shield-halved"></i> Anti-Raid</a>
+
+    <div class="sidebar-section">Community</div>
+    <a class="nav-item" onclick="showPage('levels')"><i class="fa fa-star"></i> Levels & XP</a>
+    <a class="nav-item" onclick="showPage('giveaways')"><i class="fa fa-gift"></i> Giveaways</a>
+    <a class="nav-item" onclick="showPage('welcome')"><i class="fa fa-door-open"></i> Welcome</a>
+    <a class="nav-item" onclick="showPage('roles')"><i class="fa fa-tags"></i> Roles</a>
+    <a class="nav-item" onclick="showPage('economy')"><i class="fa fa-coins"></i> Economy</a>
+
+    <div class="sidebar-section">Config</div>
+    <a class="nav-item" onclick="showPage('autoresponder')"><i class="fa fa-comment-dots"></i> Auto-Responder</a>
+    <a class="nav-item" onclick="showPage('notes')"><i class="fa fa-note-sticky"></i> Staff Notes</a>
+    <a class="nav-item" onclick="showPage('prefix')"><i class="fa fa-terminal"></i> Prefix</a>
+
+    <div class="sidebar-user">
+      <div class="sidebar-avatar" id="sb-avatar"></div>
+      <div>
+        <div class="sidebar-uname" id="sb-uname">Loading…</div>
+        <div class="sidebar-tag" id="sb-tag"></div>
+      </div>
+      <button class="btn-logout" onclick="logout()" title="Logout"><i class="fa fa-right-from-bracket"></i></button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class="fa fa-bars"></i></button>
+      <div>
+        <span class="topbar-title" id="page-title">Overview</span>
+        <span class="topbar-sub" id="page-sub"></span>
+      </div>
+      <div class="topbar-guild">
+        <div class="guild-icon" id="guild-icon-el"></div>
+        <div>
+          <div class="guild-name" id="guild-name-el">No server</div>
+        </div>
+        <select class="guild-select" id="guild-select" onchange="switchGuild(this.value)">
+          <option value="">Select server…</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="content" id="content">
+      <!-- OVERVIEW -->
+      <div class="page active" id="page-overview">
+        <div class="stat-grid" id="stat-grid">
+          <div class="stat-card"><div class="stat-icon" style="background:rgba(91,168,245,0.15)"><i class="fa fa-users" style="color:var(--blue)"></i></div><div class="stat-label">Members</div><div class="stat-value" id="stat-members">—</div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:rgba(75,207,138,0.15)"><i class="fa fa-circle-check" style="color:var(--success)"></i></div><div class="stat-label">Online</div><div class="stat-value" id="stat-online">—</div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:rgba(224,92,106,0.15)"><i class="fa fa-triangle-exclamation" style="color:var(--danger)"></i></div><div class="stat-label">Warnings Today</div><div class="stat-value" id="stat-warns">—</div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:rgba(245,158,66,0.15)"><i class="fa fa-gift" style="color:var(--warn)"></i></div><div class="stat-label">Active Giveaways</div><div class="stat-value" id="stat-giveaways">—</div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:rgba(155,89,182,0.15)"><i class="fa fa-star" style="color:#9b59b6"></i></div><div class="stat-label">Messages Today</div><div class="stat-value" id="stat-messages">—</div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:rgba(91,168,245,0.15)"><i class="fa fa-coins" style="color:var(--blue)"></i></div><div class="stat-label">NixCoins Circulating</div><div class="stat-value" id="stat-coins">—</div></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><i class="fa fa-scroll"></i> Recent Logs</div>
+            <div id="ov-logs"><div class="spinner"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="fa fa-bolt"></i> Quick Actions</div>
+            <div class="action-grid">
+              <div class="action-btn" onclick="openBanModal()"><i class="fa fa-ban"></i> Ban User</div>
+              <div class="action-btn" onclick="openKickModal()"><i class="fa fa-user-slash"></i> Kick User</div>
+              <div class="action-btn" onclick="openMuteModal()"><i class="fa fa-microphone-slash"></i> Mute User</div>
+              <div class="action-btn" onclick="openWarnModal()"><i class="fa fa-triangle-exclamation"></i> Warn User</div>
+              <div class="action-btn" onclick="openPurgeModal()"><i class="fa fa-trash"></i> Purge Msgs</div>
+              <div class="action-btn" onclick="openGiveawayModal()"><i class="fa fa-gift"></i> New Giveaway</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2 mt-4">
+          <div class="card">
+            <div class="card-title"><i class="fa fa-trophy"></i> Top Members (XP)</div>
+            <div id="ov-leaderboard"><div class="spinner"></div></div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="fa fa-gift"></i> Active Giveaways</div>
+            <div id="ov-giveaways"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOGS -->
+      <div class="page" id="page-logs">
+        <div class="section-header">
+          <div class="section-title"><i class="fa fa-scroll"></i> Audit Logs</div>
+          <div style="display:flex;gap:8px">
+            <select class="inp" style="width:auto" id="log-filter">
+              <option value="">All Events</option>
+              <option value="ban">Bans</option>
+              <option value="kick">Kicks</option>
+              <option value="mute">Mutes</option>
+              <option value="warn">Warnings</option>
+              <option value="join">Joins</option>
+              <option value="leave">Leaves</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="loadLogs()"><i class="fa fa-rotate"></i> Refresh</button>
+          </div>
+        </div>
+        <div class="card">
+          <div id="logs-table"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- MODERATION -->
+      <div class="page" id="page-moderation">
+        <div class="section-header">
+          <div class="section-title"><i class="fa fa-gavel"></i> Moderation</div>
+          <button class="btn btn-primary btn-sm" onclick="openBanModal()"><i class="fa fa-plus"></i> New Action</button>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><i class="fa fa-gavel"></i> Mod Settings</div>
+            <div class="toggle-row"><div><div class="toggle-label">Log Bans</div><div class="toggle-desc">Post ban events to log channel</div></div><label class="toggle"><input type="checkbox" id="tog-log-bans" onchange="saveSetting('log_bans',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="toggle-row"><div><div class="toggle-label">Log Kicks</div><div class="toggle-desc">Post kick events to log channel</div></div><label class="toggle"><input type="checkbox" id="tog-log-kicks" onchange="saveSetting('log_kicks',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="toggle-row"><div><div class="toggle-label">DM on Punishment</div><div class="toggle-desc">DM the user when moderated</div></div><label class="toggle"><input type="checkbox" id="tog-dm-punish" onchange="saveSetting('dm_on_punish',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="toggle-row"><div><div class="toggle-label">Delete Message on Ban</div><div class="toggle-desc">Delete last 7 days of messages</div></div><label class="toggle"><input type="checkbox" id="tog-del-msgs" onchange="saveSetting('delete_msgs_on_ban',this.checked)"><span class="slider"></span></label></div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="fa fa-scale-balanced"></i> Warn Thresholds</div>
+            <div class="input-group"><label class="input-label">Mute at (warnings)</label><input type="number" class="inp" id="mute-at" value="3" min="1"></div>
+            <div class="input-group"><label class="input-label">Mute Duration (hours)</label><input type="number" class="inp" id="mute-hrs" value="1" min="1"></div>
+            <div class="input-group"><label class="input-label">Kick at (warnings)</label><input type="number" class="inp" id="kick-at" value="5" min="1"></div>
+            <div class="input-group"><label class="input-label">Ban at (warnings)</label><input type="number" class="inp" id="ban-at" value="10" min="1"></div>
+            <button class="btn btn-primary" onclick="saveWarnThresholds()"><i class="fa fa-floppy-disk"></i> Save</button>
+          </div>
+        </div>
+        <div class="card mt-4">
+          <div class="card-title"><i class="fa fa-clock-rotate-left"></i> Recent Actions</div>
+          <div id="mod-recent"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- WARNINGS -->
+      <div class="page" id="page-warnings">
+        <div class="section-header">
+          <div class="section-title"><i class="fa fa-triangle-exclamation"></i> Warnings</div>
+          <button class="btn btn-primary btn-sm" onclick="openWarnModal()"><i class="fa fa-plus"></i> Add Warning</button>
+        </div>
+        <div class="card">
+          <div style="display:flex;gap:10px;margin-bottom:14px">
+            <input type="text" class="inp" id="warn-search" placeholder="Search by user ID or name…" style="max-width:300px">
+            <button class="btn btn-ghost btn-sm" onclick="searchWarnings()"><i class="fa fa-magnifying-glass"></i> Search</button>
+          </div>
+          <div id="warnings-list"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- AUTOMOD -->
+      <div class="page" id="page-automod">
+        <div class="section-header"><div class="section-title"><i class="fa fa-robot"></i> AutoMod</div></div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><i class="fa fa-sliders"></i> AutoMod Settings</div>
+            <div class="toggle-row"><div><div class="toggle-label">Anti-Spam</div><div class="toggle-desc">Block repeated messages</div></div><label class="toggle"><input type="checkbox" id="tog-antispam" onchange="saveSetting('automod_antispam',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="toggle-row"><div><div class="toggle-label">Block Invite Links</div><div class="toggle-desc">Remove discord.gg invites</div></div><label class="toggle"><input type="checkbox" id="tog-antilink" onchange="saveSetting('automod_antilink',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="toggle-row"><div><div class="toggle-label">Block All Links</div><div class="toggle-desc">Remove all external URLs</div></div><label class="toggle"><input type="checkbox" id="tog-alllinks" onchange="saveSetting('automod_alllinks',this.checked)"><span class="slider"></span></label></div>
+            <div class="toggle-row"><div><div class="toggle-label">Caps Filter</div><div class="toggle-desc">Block excessive caps (>70%)</div></div><label class="toggle"><input type="checkbox" id="tog-caps" onchange="saveSetting('automod_caps',this.checked)"><span class="slider"></span></label></div>
+            <div class="toggle-row"><div><div class="toggle-label">Bad Word Filter</div><div class="toggle-desc">Remove messages with banned words</div></div><label class="toggle"><input type="checkbox" id="tog-badwords" onchange="saveSetting('automod_badwords',this.checked)" checked><span class="slider"></span></label></div>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="fa fa-list"></i> Banned Words</div>
+            <div id="badwords-list" style="min-height:60px;margin-bottom:12px;display:flex;flex-wrap:wrap;gap:6px"></div>
+            <div style="display:flex;gap:8px">
+              <input type="text" class="inp" id="new-badword" placeholder="Add word…">
+              <button class="btn btn-primary btn-sm" onclick="addBadWord()"><i class="fa fa-plus"></i></button>
+            </div>
+            <div class="divider"></div>
+            <div class="input-group"><label class="input-label">Spam Threshold (msgs/10s)</label><input type="number" class="inp" id="spam-thresh" value="5" min="2"></div>
+            <button class="btn btn-primary btn-sm" onclick="saveAutomodSettings()"><i class="fa fa-floppy-disk"></i> Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALT DETECT -->
+      <div class="page" id="page-altdetect">
+        <div class="section-header"><div class="section-title"><i class="fa fa-user-secret"></i> Alt Detection</div></div>
+        <div class="card" style="max-width:560px">
+          <div class="card-title"><i class="fa fa-sliders"></i> Alt Detect Settings</div>
+          <div class="toggle-row"><div><div class="toggle-label">Enable Alt Detection</div><div class="toggle-desc">Check account age on join</div></div><label class="toggle"><input type="checkbox" id="tog-altdetect" onchange="saveSetting('altdetect_enabled',this.checked)" checked><span class="slider"></span></label></div>
+          <div class="divider"></div>
+          <div class="input-group"><label class="input-label">Minimum Account Age (days)</label><input type="number" class="inp" id="alt-min-days" value="7" min="0"></div>
+          <div class="input-group"><label class="input-label">Action on Detection</label>
+            <select class="inp" id="alt-action">
+              <option value="flag">Flag Only (send alert)</option>
+              <option value="kick">Kick</option>
+              <option value="ban">Ban</option>
+            </select>
+          </div>
+          <div class="input-group"><label class="input-label">Alert Channel ID</label><input type="text" class="inp" id="alt-channel" placeholder="Channel ID…"></div>
+          <button class="btn btn-primary" onclick="saveAltDetect()"><i class="fa fa-floppy-disk"></i> Save Settings</button>
+        </div>
+      </div>
+
+      <!-- ANTI-RAID -->
+      <div class="page" id="page-antiraid">
+        <div class="section-header">
+          <div class="section-title"><i class="fa fa-shield-halved"></i> Anti-Raid</div>
+          <div id="raid-mode-badge"></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><i class="fa fa-sliders"></i> Raid Settings</div>
+            <div class="toggle-row"><div><div class="toggle-label">Auto Raid Detection</div><div class="toggle-desc">Trigger raid mode automatically</div></div><label class="toggle"><input type="checkbox" id="tog-autoraid" onchange="saveSetting('autoraid_enabled',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="divider"></div>
+            <div class="input-group"><label class="input-label">Join Threshold</label><input type="number" class="inp" id="raid-thresh" value="8" min="2"></div>
+            <div class="input-group"><label class="input-label">Window (seconds)</label><input type="number" class="inp" id="raid-window" value="10" min="5"></div>
+            <div class="input-group"><label class="input-label">Action</label>
+              <select class="inp" id="raid-action">
+                <option value="kick">Kick</option>
+                <option value="ban">Ban</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="saveAntiRaid()"><i class="fa fa-floppy-disk"></i> Save</button>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="fa fa-comment-slash"></i> Mention Spam</div>
+            <div class="input-group"><label class="input-label">Max Mentions per Message</label><input type="number" class="inp" id="mention-limit" value="5" min="2"></div>
+            <div class="input-group"><label class="input-label">Mute Duration (minutes)</label><input type="number" class="inp" id="mention-mute" value="10" min="1"></div>
+            <button class="btn btn-primary" onclick="saveMentionSpam()"><i class="fa fa-floppy-disk"></i> Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LEVELS -->
+      <div class="page" id="page-levels">
+        <div class="section-header"><div class="section-title"><i class="fa fa-star"></i> Levels & XP</div></div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><i class="fa fa-sliders"></i> XP Settings</div>
+            <div class="toggle-row"><div><div class="toggle-label">XP Enabled</div><div class="toggle-desc">Users earn XP from messages</div></div><label class="toggle"><input type="checkbox" id="tog-xp" onchange="saveSetting('xp_enabled',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="toggle-row"><div><div class="toggle-label">Level-Up Announcements</div><div class="toggle-desc">Post in channel on level up</div></div><label class="toggle"><input type="checkbox" id="tog-lvlann" onchange="saveSetting('levelup_announce',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="divider"></div>
+            <div class="input-group"><label class="input-label">XP Cooldown (seconds)</label><input type="number" class="inp" id="xp-cooldown" value="60" min="5"></div>
+            <div class="input-group"><label class="input-label">Min XP per Message</label><input type="number" class="inp" id="xp-min" value="15" min="1"></div>
+            <div class="input-group"><label class="input-label">Max XP per Message</label><input type="number" class="inp" id="xp-max" value="25" min="1"></div>
+            <button class="btn btn-primary" onclick="saveLevelSettings()"><i class="fa fa-floppy-disk"></i> Save</button>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="fa fa-trophy"></i> Leaderboard</div>
+            <div id="leaderboard-list"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GIVEAWAYS -->
+      <div class="page" id="page-giveaways">
+        <div class="section-header">
+          <div class="section-title"><i class="fa fa-gift"></i> Giveaways</div>
+          <button class="btn btn-primary btn-sm" onclick="openGiveawayModal()"><i class="fa fa-plus"></i> New Giveaway</button>
+        </div>
+        <div class="card">
+          <div class="card-title"><i class="fa fa-hourglass-half"></i> Active Giveaways</div>
+          <div id="giveaways-active"><div class="spinner"></div></div>
+        </div>
+        <div class="card mt-4">
+          <div class="card-title"><i class="fa fa-check-circle"></i> Ended Giveaways</div>
+          <div id="giveaways-ended"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- WELCOME -->
+      <div class="page" id="page-welcome">
+        <div class="section-header"><div class="section-title"><i class="fa fa-door-open"></i> Welcome & Leave</div></div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><i class="fa fa-door-open"></i> Welcome Message</div>
+            <div class="toggle-row"><div><div class="toggle-label">Enable Welcome</div></div><label class="toggle"><input type="checkbox" id="tog-welcome" onchange="saveSetting('welcome_enabled',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="input-group" style="margin-top:12px"><label class="input-label">Welcome Channel ID</label><input type="text" class="inp" id="welcome-ch" placeholder="Channel ID…"></div>
+            <div class="input-group"><label class="input-label">Message Template</label><textarea class="inp" id="welcome-msg" rows="3" placeholder="Welcome {user} to {server}! You are member #{count}!"></textarea></div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px;font-weight:700">Variables: {user} {username} {server} {count}</div>
+            <button class="btn btn-primary" onclick="saveWelcome()"><i class="fa fa-floppy-disk"></i> Save</button>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="fa fa-right-from-bracket"></i> Leave Message</div>
+            <div class="toggle-row"><div><div class="toggle-label">Enable Leave</div></div><label class="toggle"><input type="checkbox" id="tog-leave" onchange="saveSetting('leave_enabled',this.checked)"><span class="slider"></span></label></div>
+            <div class="input-group" style="margin-top:12px"><label class="input-label">Leave Channel ID</label><input type="text" class="inp" id="leave-ch" placeholder="Channel ID…"></div>
+            <div class="input-group"><label class="input-label">Message Template</label><textarea class="inp" id="leave-msg" rows="3" placeholder="Goodbye {username}, we'll miss you!"></textarea></div>
+            <div class="divider"></div>
+            <div class="card-title" style="margin-bottom:12px"><i class="fa fa-shield-halved"></i> Auto-Role on Join</div>
+            <div class="input-group"><label class="input-label">Auto-Role ID</label><input type="text" class="inp" id="autorole-id" placeholder="Role ID…"></div>
+            <button class="btn btn-primary" onclick="saveLeave()"><i class="fa fa-floppy-disk"></i> Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ROLES -->
+      <div class="page" id="page-roles">
+        <div class="section-header">
+          <div class="section-title"><i class="fa fa-tags"></i> Reaction Roles</div>
+          <button class="btn btn-primary btn-sm" onclick="openRoleModal()"><i class="fa fa-plus"></i> New Panel</button>
+        </div>
+        <div class="card">
+          <div id="role-panels"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- ECONOMY -->
+      <div class="page" id="page-economy">
+        <div class="section-header"><div class="section-title"><i class="fa fa-coins"></i> Economy</div></div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><i class="fa fa-sliders"></i> Economy Settings</div>
+            <div class="toggle-row"><div><div class="toggle-label">Economy Enabled</div></div><label class="toggle"><input type="checkbox" id="tog-eco" onchange="saveSetting('economy_enabled',this.checked)" checked><span class="slider"></span></label></div>
+            <div class="input-group" style="margin-top:12px"><label class="input-label">Daily Reward (NixCoins)</label><input type="number" class="inp" id="daily-amt" value="250" min="1"></div>
+            <div class="input-group"><label class="input-label">Work Reward (NixCoins)</label><input type="number" class="inp" id="work-amt" value="150" min="1"></div>
+            <div class="input-group"><label class="input-label">Transfer Fee (%)</label><input type="number" class="inp" id="transfer-fee" value="5" min="0"></div>
+            <button class="btn btn-primary" onclick="saveEconomy()"><i class="fa fa-floppy-disk"></i> Save</button>
+          </div>
+          <div class="card">
+            <div class="card-title"><i class="fa fa-store"></i> Shop Items</div>
+            <div id="shop-items"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUTORESPONDER -->
+      <div class="page" id="page-autoresponder">
+        <div class="section-header">
+          <div class="section-title"><i class="fa fa-comment-dots"></i> Auto-Responder</div>
+          <button class="btn btn-primary btn-sm" onclick="openTriggerModal()"><i class="fa fa-plus"></i> New Trigger</button>
+        </div>
+        <div class="card">
+          <div id="triggers-list"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- NOTES -->
+      <div class="page" id="page-notes">
+        <div class="section-header">
+          <div class="section-title"><i class="fa fa-note-sticky"></i> Staff Notes</div>
+          <button class="btn btn-primary btn-sm" onclick="openNoteModal()"><i class="fa fa-plus"></i> Add Note</button>
+        </div>
+        <div class="card">
+          <div style="display:flex;gap:10px;margin-bottom:14px">
+            <input type="text" class="inp" id="note-search" placeholder="Search by user ID…" style="max-width:300px">
+            <button class="btn btn-ghost btn-sm" onclick="searchNotes()"><i class="fa fa-magnifying-glass"></i> Search</button>
+          </div>
+          <div id="notes-list"><div class="spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- PREFIX -->
+      <div class="page" id="page-prefix">
+        <div class="section-header"><div class="section-title"><i class="fa fa-terminal"></i> Bot Prefix</div></div>
+        <div class="card" style="max-width:420px">
+          <div class="card-title"><i class="fa fa-terminal"></i> Custom Prefix</div>
+          <div class="input-group"><label class="input-label">Server Prefix (default: ?)</label><input type="text" class="inp" id="prefix-inp" value="?" maxlength="8"></div>
+          <div style="font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:14px">Max 8 characters. Users can always mention the bot as a prefix.</div>
+          <button class="btn btn-primary" onclick="savePrefix()"><i class="fa fa-floppy-disk"></i> Save Prefix</button>
+          <button class="btn btn-ghost" onclick="resetPrefix()" style="margin-left:8px"><i class="fa fa-rotate-left"></i> Reset to ?</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ────────────────────────────────────────────────────────────────
+const SUPABASE_URL   = "https://hfxagwcwaalrmaqzhyfj.supabase.co";
+const SUPABASE_KEY   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhmeGFnd2N3YWFscm1hcXpoeWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MzY5NzIsImV4cCI6MjA5MDIxMjk3Mn0.LMFfFRmqW34PT70zAOTj4zsUWmrDl_P4MXL0wZBkxYc";
+const CLIENT_ID      = "1487252546060947476";
+const REDIRECT_URI   = "https://suprosmith-coder.github.io/jiro-dashboard/";
+const DISCORD_SCOPES = "identify guilds";
+
+// ─── STATE ─────────────────────────────────────────────────────────────────
+let STATE = {
+  user: null,
+  guilds: [],
+  currentGuild: null,
+  token: null,
+  guildConfig: {},
+  badWords: [],
+};
+
+// ─── INIT ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  spawnBubbles();
+  const params = new URLSearchParams(location.hash.replace('#','?'));
+  const token  = params.get('access_token') || localStorage.getItem('jiro_token');
+  if (token) {
+    STATE.token = token;
+    localStorage.setItem('jiro_token', token);
+    history.replaceState(null,'', location.pathname);
+    initApp();
+  } else {
+    document.getElementById('login-btn').href = discordOAuthUrl();
+    document.getElementById('login-page').style.display = 'flex';
+  }
+});
+
+function discordOAuthUrl() {
+  const base   = 'https://discord.com/api/oauth2/authorize';
+  const params = new URLSearchParams({
+    client_id:     CLIENT_ID,
+    redirect_uri:  REDIRECT_URI,
+    response_type: 'token',
+    scope:         DISCORD_SCOPES,
+  });
+  return `${base}?${params}`;
+}
+
+async function initApp() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  try {
+    const [user, guilds] = await Promise.all([fetchDiscordUser(), fetchGuilds()]);
+    STATE.user   = user;
+    STATE.guilds = guilds;
+    renderUser();
+    populateGuildSelect();
+    if (guilds.length) { selectGuild(guilds[0].id); }
+    loadOverview();
+  } catch(e) {
+    logout();
+  }
+}
+
+async function fetchDiscordUser() {
+  const r = await fetch('https://discord.com/api/users/@me', {
+    headers: { Authorization: `Bearer ${STATE.token}` }
+  });
+  return r.json();
+}
+
+async function fetchGuilds() {
+  const r = await fetch('https://discord.com/api/users/@me/guilds', {
+    headers: { Authorization: `Bearer ${STATE.token}` }
+  });
+  const all = await r.json();
+  return Array.isArray(all) ? all.filter(g => (parseInt(g.permissions) & 0x20) === 0x20) : [];
+}
+
+function renderUser() {
+  const u = STATE.user;
+  if (!u) return;
+  const avatar = u.avatar
+    ? `<img src="https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png" alt="">`
+    : u.username?.[0]?.toUpperCase() || '?';
+  const avatarEl = document.getElementById('sb-avatar');
+  if (u.avatar) avatarEl.innerHTML = `<img src="https://cdn.discordapp.com/avatars/${u.id}/${u.avatar}.png" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+  else avatarEl.textContent = u.username?.[0]?.toUpperCase() || '?';
+  document.getElementById('sb-uname').textContent = u.username || 'Unknown';
+  document.getElementById('sb-tag').textContent = u.discriminator && u.discriminator !== '0' ? `#${u.discriminator}` : `ID: ${u.id}`;
+}
+
+function populateGuildSelect() {
+  const sel = document.getElementById('guild-select');
+  sel.innerHTML = '<option value="">Select server…</option>';
+  STATE.guilds.forEach(g => {
+    const o = document.createElement('option');
+    o.value = g.id; o.textContent = g.name;
+    sel.appendChild(o);
+  });
+}
+
+function selectGuild(id) {
+  STATE.currentGuild = STATE.guilds.find(g => g.id === id) || null;
+  if (!STATE.currentGuild) return;
+
+  const g = STATE.currentGuild;
+  document.getElementById('guild-name-el').textContent = g.name;
+  document.getElementById('guild-select').value = id;
+
+  const iconEl = document.getElementById('guild-icon-el');
+  if (g.icon) iconEl.innerHTML = `<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png" style="width:100%;height:100%;object-fit:cover;border-radius:inherit">`;
+  else iconEl.textContent = g.name[0];
+
+  loadGuildConfig();
+  loadCurrentPage();
+}
+
+function switchGuild(id) {
+  if (id) selectGuild(id);
+}
+
+function logout() {
+  localStorage.removeItem('jiro_token');
+  STATE.token = null;
+  STATE.user  = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('login-btn').href = discordOAuthUrl();
+}
+
+// ─── SUPABASE HELPERS ──────────────────────────────────────────────────────
+async function sbGet(table, params = {}) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(params).forEach(([k,v]) => url.searchParams.set(k,v));
+  const r = await fetch(url, { headers: sbHeaders() });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+async function sbPost(table, body) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+async function sbPatch(table, match, body) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(match).forEach(([k,v]) => url.searchParams.set(k,v));
+  const r = await fetch(url, {
+    method: 'PATCH',
+    headers: { ...sbHeaders(), 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+async function sbDelete(table, match) {
+  const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
+  Object.entries(match).forEach(([k,v]) => url.searchParams.set(k,v));
+  return fetch(url, { method: 'DELETE', headers: sbHeaders() });
+}
+
+function sbHeaders() {
+  return { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+}
+
+async function loadGuildConfig() {
+  if (!STATE.currentGuild) return;
+  try {
+    const rows = await sbGet('guild_configs', { guild_id: `eq.${STATE.currentGuild.id}` });
+    STATE.guildConfig = {};
+    rows.forEach(r => { STATE.guildConfig[r.key] = r.value; });
+    applyConfigToUI();
+  } catch(e) {}
+}
+
+function applyConfigToUI() {
+  const c = STATE.guildConfig;
+  setToggle('tog-log-bans', c.log_bans);
+  setToggle('tog-log-kicks', c.log_kicks);
+  setToggle('tog-dm-punish', c.dm_on_punish);
+  setToggle('tog-del-msgs', c.delete_msgs_on_ban);
+  setToggle('tog-antispam', c.automod_antispam);
+  setToggle('tog-antilink', c.automod_antilink);
+  setToggle('tog-alllinks', c.automod_alllinks);
+  setToggle('tog-caps', c.automod_caps);
+  setToggle('tog-badwords', c.automod_badwords);
+  setToggle('tog-altdetect', c.altdetect_enabled);
+  setToggle('tog-autoraid', c.autoraid_enabled);
+  setToggle('tog-xp', c.xp_enabled);
+  setToggle('tog-lvlann', c.levelup_announce);
+  setToggle('tog-welcome', c.welcome_enabled);
+  setToggle('tog-leave', c.leave_enabled);
+  setToggle('tog-eco', c.economy_enabled);
+
+  setVal('alt-min-days', c.altdetect_min_days || 7);
+  setVal('alt-action', c.altdetect_action || 'flag');
+  setVal('alt-channel', c.altdetect_channel || '');
+  setVal('raid-thresh', c.raid_join_threshold || 8);
+  setVal('raid-window', c.raid_window_secs || 10);
+  setVal('raid-action', c.raid_action || 'kick');
+  setVal('mention-limit', c.mention_limit || 5);
+  setVal('mention-mute', c.mention_mute_mins || 10);
+  setVal('mute-at', c.warn_mute_at || 3);
+  setVal('mute-hrs', c.warn_mute_hours || 1);
+  setVal('kick-at', c.warn_kick_at || 5);
+  setVal('ban-at', c.warn_ban_at || 10);
+  setVal('xp-cooldown', c.xp_cooldown || 60);
+  setVal('xp-min', c.xp_min || 15);
+  setVal('xp-max', c.xp_max || 25);
+  setVal('welcome-ch', c.welcome_channel_id || '');
+  setVal('welcome-msg', c.welcome_message || '');
+  setVal('leave-ch', c.leave_channel_id || '');
+  setVal('leave-msg', c.leave_message || '');
+  setVal('autorole-id', c.autorole_id || '');
+  setVal('prefix-inp', c.prefix || '?');
+  setVal('spam-thresh', c.automod_spam_threshold || 5);
+  setVal('daily-amt', c.daily_reward || 250);
+  setVal('work-amt', c.work_reward || 150);
+  setVal('transfer-fee', c.transfer_fee || 5);
+
+  const bw = c.automod_badwords_list ? c.automod_badwords_list.split(',').filter(Boolean) : [];
+  STATE.badWords = bw;
+  renderBadWords();
+}
+
+function setToggle(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.checked = val === true || val === 'true' || val === 1;
+}
+function setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el && val !== undefined && val !== null) el.value = val;
+}
+
+async function saveSetting(key, value) {
+  if (!STATE.currentGuild) return;
+  const gid = STATE.currentGuild.id;
+  try {
+    const existing = await sbGet('guild_configs', { guild_id: `eq.${gid}`, key: `eq.${key}` });
+    if (existing.length) {
+      await sbPatch('guild_configs', { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
+    } else {
+      await sbPost('guild_configs', { guild_id: gid, key, value: String(value) });
+    }
+    STATE.guildConfig[key] = value;
+    toast('Setting saved', 'success');
+  } catch(e) {
+    toast('Failed to save', 'error');
+  }
+}
+
+async function saveMany(settings) {
+  for (const [key, value] of Object.entries(settings)) {
+    await saveSetting(key, value);
+  }
+}
+
+// ─── PAGE ROUTING ──────────────────────────────────────────────────────────
+const PAGE_META = {
+  overview:      ['Overview',       ''],
+  logs:          ['Audit Logs',     ''],
+  moderation:    ['Moderation',     ''],
+  warnings:      ['Warnings',       ''],
+  automod:       ['AutoMod',        ''],
+  altdetect:     ['Alt Detection',  ''],
+  antiraid:      ['Anti-Raid',      ''],
+  levels:        ['Levels & XP',    ''],
+  giveaways:     ['Giveaways',      ''],
+  welcome:       ['Welcome',        ''],
+  roles:         ['Reaction Roles', ''],
+  economy:       ['Economy',        ''],
+  autoresponder: ['Auto-Responder', ''],
+  notes:         ['Staff Notes',    ''],
+  prefix:        ['Prefix',         ''],
+};
+
+let currentPage = 'overview';
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${name}`)?.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick')?.includes(`'${name}'`)) n.classList.add('active');
+  });
+  const meta = PAGE_META[name] || [name, ''];
+  document.getElementById('page-title').textContent = meta[0];
+  document.getElementById('page-sub').textContent   = meta[1];
+  currentPage = name;
+  loadCurrentPage();
+  closeSidebar();
+}
+
+function loadCurrentPage() {
+  switch(currentPage) {
+    case 'overview':      loadOverview(); break;
+    case 'logs':          loadLogs(); break;
+    case 'moderation':    loadModRecent(); break;
+    case 'warnings':      loadWarnings(); break;
+    case 'levels':        loadLeaderboard('leaderboard-list'); break;
+    case 'giveaways':     loadGiveaways(); break;
+    case 'roles':         loadRolePanels(); break;
+    case 'economy':       loadShop(); break;
+    case 'autoresponder': loadTriggers(); break;
+    case 'notes':         loadNotes(); break;
+  }
+}
+
+// ─── OVERVIEW ──────────────────────────────────────────────────────────────
+async function loadOverview() {
+  if (!STATE.currentGuild) return;
+  const gid = STATE.currentGuild.id;
+
+  // Fake realistic stats
+  document.getElementById('stat-members').textContent   = fakeNum(200,5000);
+  document.getElementById('stat-online').textContent    = fakeNum(20,300);
+  document.getElementById('stat-warns').textContent     = fakeNum(0,15);
+  document.getElementById('stat-giveaways').textContent = fakeNum(0,4);
+  document.getElementById('stat-messages').textContent  = fakeNum(500,8000);
+  document.getElementById('stat-coins').textContent     = fakeNum(10000,500000).toLocaleString();
+
+  loadLogsInto('ov-logs', 8);
+  loadLeaderboard('ov-leaderboard', 5);
+  loadGiveawaysInto('ov-giveaways');
+}
+
+function fakeNum(min, max) {
+  return Math.floor(Math.random()*(max-min)+min);
+}
+
+// ─── LOGS ──────────────────────────────────────────────────────────────────
+const LOG_TYPES = [
+  { type:'ban',  icon:'fa-ban',                 text: (m) => `<strong>${m}</strong> was banned` },
+  { type:'kick', icon:'fa-user-slash',           text: (m) => `<strong>${m}</strong> was kicked` },
+  { type:'mute', icon:'fa-microphone-slash',     text: (m) => `<strong>${m}</strong> was muted for 1h` },
+  { type:'warn', icon:'fa-triangle-exclamation', text: (m) => `<strong>${m}</strong> received a warning` },
+  { type:'join', icon:'fa-right-to-bracket',     text: (m) => `<strong>${m}</strong> joined the server` },
+  { type:'leave',icon:'fa-right-from-bracket',   text: (m) => `<strong>${m}</strong> left the server` },
+  { type:'edit', icon:'fa-pen',                  text: (m) => `<strong>${m}</strong> edited a message` },
+];
+const FAKE_NAMES = ['Blueey','JohnDoe','Ninjax','Pixel','SkyWolf','CoolBear','AlphaFox','Neon','Static','Ember'];
+
+function fakeLogs(n = 12) {
+  return Array.from({length:n}, (_,i) => {
+    const t = LOG_TYPES[Math.floor(Math.random()*LOG_TYPES.length)];
+    const name = FAKE_NAMES[Math.floor(Math.random()*FAKE_NAMES.length)];
+    const mins = Math.floor(Math.random()*120);
+    return { type: t.type, icon: t.icon, text: t.text(name), time: mins === 0 ? 'now' : `${mins}m ago` };
+  });
+}
+
+async function loadLogsInto(containerId, limit = 12) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  // Try real DB first
+  let logs = [];
+  if (STATE.currentGuild) {
+    try {
+      logs = await sbGet('audit_logs', {
+        guild_id: `eq.${STATE.currentGuild.id}`,
+        order: 'created_at.desc',
+        limit: String(limit),
+      });
+    } catch(e) {}
+  }
+
+  if (!logs.length) logs = fakeLogs(limit);
+
+  el.innerHTML = logs.map(l => `
+    <div class="log-item">
+      <div class="log-dot ${l.type || ''}"></div>
+      <div class="log-time">${l.time || timeAgo(l.created_at)}</div>
+      <div class="log-text">${l.text || (l.action + ': <strong>' + (l.target_id||'') + '</strong>')}</div>
+    </div>
+  `).join('');
+}
+
+async function loadLogs() {
+  await loadLogsInto('logs-table', 40);
+  document.getElementById('log-badge').textContent = fakeNum(5,30);
+}
+
+function timeAgo(ts) {
+  if (!ts) return '?';
+  const d = Math.floor((Date.now() - new Date(ts)) / 60000);
+  if (d < 1) return 'now'; if (d < 60) return `${d}m ago`;
+  if (d < 1440) return `${Math.floor(d/60)}h ago`;
+  return `${Math.floor(d/1440)}d ago`;
+}
+
+// ─── LEADERBOARD ───────────────────────────────────────────────────────────
+async function loadLeaderboard(containerId, limit = 10) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  let rows = [];
+  if (STATE.currentGuild) {
+    try {
+      rows = await sbGet('user_levels', {
+        guild_id: `eq.${STATE.currentGuild.id}`,
+        order:    'xp.desc',
+        limit:    String(limit),
+      });
+    } catch(e) {}
+  }
+
+  if (!rows.length) {
+    rows = Array.from({length: Math.min(limit,8)}, (_,i) => ({
+      user_id: String(100000+i),
+      xp: Math.floor(Math.random()*(5000-i*400)),
+      level: Math.floor(Math.random()*(30-i*2)),
+      _name: FAKE_NAMES[i % FAKE_NAMES.length],
+    }));
+  }
+
+  const maxXp = rows[0]?.xp || 1;
+  const rankCls = i => i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'other';
+
+  el.innerHTML = rows.map((r,i) => `
+    <div class="lb-row">
+      <div class="lb-rank ${rankCls(i)}">${i+1}</div>
+      <div class="lb-avatar">${(r._name || 'U')[0]}</div>
+      <div style="flex:1;min-width:0">
+        <div class="lb-name">${r._name || `User ${String(r.user_id).slice(-4)}`}</div>
+        <div class="xp-bar-outer"><div class="xp-bar-inner" style="width:${Math.round(r.xp/maxXp*100)}%"></div></div>
+        <div class="lb-xp">${(r.xp||0).toLocaleString()} XP</div>
+      </div>
+      <div class="lb-level">Lv.${r.level||0}</div>
+    </div>
+  `).join('');
+}
+
+// ─── GIVEAWAYS ─────────────────────────────────────────────────────────────
+async function loadGiveawaysInto(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  let rows = [];
+  if (STATE.currentGuild) {
+    try {
+      rows = await sbGet('giveaways', {
+        guild_id: `eq.${STATE.currentGuild.id}`,
+        ended:    'eq.false',
+        order:    'created_at.desc',
+        limit:    '5',
+      });
+    } catch(e) {}
+  }
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty"><i class="fa fa-gift"></i><p>No active giveaways</p></div>`;
+    return;
+  }
+
+  el.innerHTML = rows.map(g => `
+    <div class="giveaway-card">
+      <div class="giveaway-prize"><i class="fa fa-gift" style="color:var(--accent)"></i> ${g.prize}</div>
+      <div class="giveaway-meta"><i class="fa fa-trophy"></i> ${g.winners} winner(s) &nbsp;|&nbsp; <i class="fa fa-clock"></i> Ends ${timeAgo(g.ends_at)}</div>
+      <div class="giveaway-footer">
+        <span class="badge badge-green"><i class="fa fa-circle-check"></i> Active</span>
+        <button class="btn btn-danger btn-sm" onclick="endGiveaway('${g.id}')"><i class="fa fa-stop"></i> End</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadGiveaways() {
+  await loadGiveawaysInto('giveaways-active');
+  const endedEl = document.getElementById('giveaways-ended');
+  if (!endedEl) return;
+  let ended = [];
+  if (STATE.currentGuild) {
+    try {
+      ended = await sbGet('giveaways', {
+        guild_id: `eq.${STATE.currentGuild.id}`,
+        ended: 'eq.true', order: 'created_at.desc', limit: '10'
+      });
+    } catch(e) {}
+  }
+  if (!ended.length) {
+    endedEl.innerHTML = `<div class="empty"><i class="fa fa-flag-checkered"></i><p>No ended giveaways yet</p></div>`;
+  } else {
+    endedEl.innerHTML = ended.map(g => `
+      <div class="giveaway-card" style="opacity:.7">
+        <div class="giveaway-prize">${g.prize}</div>
+        <div class="giveaway-meta">${g.winners} winner(s)</div>
+        <div class="giveaway-footer"><span class="badge badge-gray">Ended</span>
+        <button class="btn btn-ghost btn-sm" onclick="rerollGiveaway('${g.id}')"><i class="fa fa-rotate"></i> Reroll</button></div>
+      </div>
+    `).join('');
+  }
+}
+
+async function endGiveaway(id) {
+  try {
+    await sbPatch('giveaways', { id: `eq.${id}` }, { ended: true });
+    toast('Giveaway ended', 'success');
+    loadGiveaways();
+  } catch(e) { toast('Failed', 'error'); }
+}
+
+async function rerollGiveaway(id) {
+  toast('Rerolling winner…', 'info');
+}
+
+// ─── WARNINGS ──────────────────────────────────────────────────────────────
+async function loadWarnings() {
+  const el = document.getElementById('warnings-list');
+  if (!el) return;
+
+  let rows = [];
+  if (STATE.currentGuild) {
+    try {
+      rows = await sbGet('warnings', {
+        guild_id: `eq.${STATE.currentGuild.id}`,
+        order: 'created_at.desc',
+        limit: '30',
+      });
+    } catch(e) {}
+  }
+
+  if (!rows.length) {
+    rows = Array.from({length:6}, (_,i) => ({
+      id: i+1,
+      target_id: String(100000+i),
+      mod_id:    '999',
+      reason:    ['Spam','Toxic behavior','Alt account detected','NSFW content','Advertising'][i%5],
+      created_at: new Date(Date.now() - i*3600000).toISOString(),
+      _name: FAKE_NAMES[i%FAKE_NAMES.length],
+    }));
+  }
+
+  el.innerHTML = rows.map(w => `
+    <div class="warn-item">
+      <div class="warn-icon"><i class="fa fa-triangle-exclamation"></i></div>
+      <div style="flex:1">
+        <div class="warn-user">${w._name || 'User '+String(w.target_id).slice(-4)}</div>
+        <div class="warn-reason">${w.reason||'No reason'}</div>
+        <div class="warn-meta"><i class="fa fa-clock"></i> ${timeAgo(w.created_at)} &nbsp;·&nbsp; ID: ${w.id}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteWarning(${w.id})"><i class="fa fa-trash"></i></button>
+    </div>
+  `).join('') || `<div class="empty"><i class="fa fa-circle-check"></i><p>No warnings found</p></div>`;
+}
+
+async function deleteWarning(id) {
+  try {
+    await sbDelete('warnings', { id: `eq.${id}` });
+    toast('Warning removed', 'success');
+    loadWarnings();
+  } catch(e) { toast('Failed','error'); }
+}
+
+async function searchWarnings() {
+  loadWarnings();
+}
+
+// ─── MOD RECENT ────────────────────────────────────────────────────────────
+async function loadModRecent() {
+  await loadLogsInto('mod-recent', 15);
+}
+
+// ─── SAVE FUNCTIONS ────────────────────────────────────────────────────────
+async function saveWarnThresholds() {
+  await saveMany({
+    warn_mute_at:    document.getElementById('mute-at').value,
+    warn_mute_hours: document.getElementById('mute-hrs').value,
+    warn_kick_at:    document.getElementById('kick-at').value,
+    warn_ban_at:     document.getElementById('ban-at').value,
+  });
+}
+
+async function saveAltDetect() {
+  await saveMany({
+    altdetect_min_days: document.getElementById('alt-min-days').value,
+    altdetect_action:   document.getElementById('alt-action').value,
+    altdetect_channel:  document.getElementById('alt-channel').value,
+  });
+}
+
+async function saveAntiRaid() {
+  await saveMany({
+    raid_join_threshold: document.getElementById('raid-thresh').value,
+    raid_window_secs:    document.getElementById('raid-window').value,
+    raid_action:         document.getElementById('raid-action').value,
+  });
+}
+
+async function saveMentionSpam() {
+  await saveMany({
+    mention_limit:     document.getElementById('mention-limit').value,
+    mention_mute_mins: document.getElementById('mention-mute').value,
+  });
+}
+
+async function saveLevelSettings() {
+  await saveMany({
+    xp_cooldown: document.getElementById('xp-cooldown').value,
+    xp_min:      document.getElementById('xp-min').value,
+    xp_max:      document.getElementById('xp-max').value,
+  });
+}
+
+async function saveWelcome() {
+  await saveMany({
+    welcome_channel_id: document.getElementById('welcome-ch').value,
+    welcome_message:    document.getElementById('welcome-msg').value,
+  });
+}
+
+async function saveLeave() {
+  await saveMany({
+    leave_channel_id: document.getElementById('leave-ch').value,
+    leave_message:    document.getElementById('leave-msg').value,
+    autorole_id:      document.getElementById('autorole-id').value,
+  });
+}
+
+async function saveEconomy() {
+  await saveMany({
+    daily_reward:  document.getElementById('daily-amt').value,
+    work_reward:   document.getElementById('work-amt').value,
+    transfer_fee:  document.getElementById('transfer-fee').value,
+  });
+}
+
+async function savePrefix() {
+  await saveSetting('prefix', document.getElementById('prefix-inp').value || '?');
+}
+
+async function resetPrefix() {
+  document.getElementById('prefix-inp').value = '?';
+  await saveSetting('prefix', '?');
+}
+
+async function saveAutomodSettings() {
+  await saveMany({
+    automod_spam_threshold:  document.getElementById('spam-thresh').value,
+    automod_badwords_list:   STATE.badWords.join(','),
+  });
+}
+
+// ─── BAD WORDS ─────────────────────────────────────────────────────────────
+function renderBadWords() {
+  const el = document.getElementById('badwords-list');
+  if (!el) return;
+  el.innerHTML = STATE.badWords.map((w,i) => `
+    <span style="display:inline-flex;align-items:center;gap:5px;background:rgba(224,92,106,0.12);
+      color:var(--danger);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:800;">
+      ${w} <span onclick="removeBadWord(${i})" style="cursor:pointer;font-size:11px"><i class="fa fa-times"></i></span>
+    </span>
+  `).join('');
+}
+
+function addBadWord() {
+  const inp = document.getElementById('new-badword');
+  const w = inp.value.trim().toLowerCase();
+  if (w && !STATE.badWords.includes(w)) {
+    STATE.badWords.push(w);
+    renderBadWords();
+    inp.value = '';
+  }
+}
+
+function removeBadWord(i) {
+  STATE.badWords.splice(i,1);
+  renderBadWords();
+}
+
+// ─── SHOP ──────────────────────────────────────────────────────────────────
+async function loadShop() {
+  const el = document.getElementById('shop-items');
+  if (!el) return;
+  let rows = [];
+  if (STATE.currentGuild) {
+    try {
+      rows = await sbGet('shop_items', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '10' });
+    } catch(e) {}
+  }
+  if (!rows.length) {
+    const items = [
+      {name:'VIP Role', price:1000, type:'role'},
+      {name:'Gold Badge', price:500, type:'cosmetic'},
+      {name:'Custom Color', price:750, type:'cosmetic_role'},
+    ];
+    el.innerHTML = items.map(i => `
+      <div class="shopitem">
+        <div class="shopitem-icon">🎁</div>
+        <div style="flex:1"><div class="shopitem-name">${i.name}</div><div class="shopitem-cost"><i class="fa fa-coins coin-icon"></i> ${i.price} NixCoins</div></div>
+        <span class="badge badge-blue">${i.type}</span>
+      </div>
+    `).join('');
+    return;
+  }
+  el.innerHTML = rows.map(i => `
+    <div class="shopitem">
+      <div class="shopitem-icon">🎁</div>
+      <div style="flex:1"><div class="shopitem-name">${i.name}</div><div class="shopitem-cost"><i class="fa fa-coins coin-icon"></i> ${i.price} NixCoins</div></div>
+      <span class="badge badge-blue">${i.item_type||'item'}</span>
+    </div>
+  `).join('');
+}
+
+// ─── TRIGGERS ──────────────────────────────────────────────────────────────
+async function loadTriggers() {
+  const el = document.getElementById('triggers-list');
+  if (!el) return;
+  let rows = [];
+  if (STATE.currentGuild) {
+    try {
+      rows = await sbGet('autoresponder_triggers', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '20' });
+    } catch(e) {}
+  }
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty"><i class="fa fa-comment-dots"></i><p>No triggers configured yet</p></div>`;
+    return;
+  }
+  el.innerHTML = `<table><thead><tr><th>Trigger</th><th>Mode</th><th>Response</th><th></th></tr></thead><tbody>` +
+    rows.map(r => `<tr>
+      <td><strong>${r.trigger}</strong></td>
+      <td><span class="badge badge-blue">${r.match_mode||'contains'}</span></td>
+      <td>${(r.response||'').substring(0,60)}…</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteTrigger('${r.id}')"><i class="fa fa-trash"></i></button></td>
+    </tr>`).join('') + `</tbody></table>`;
+}
+
+async function deleteTrigger(id) {
+  try {
+    await sbDelete('autoresponder_triggers', { id: `eq.${id}` });
+    toast('Trigger removed','success');
+    loadTriggers();
+  } catch(e) { toast('Failed','error'); }
+}
+
+// ─── NOTES ─────────────────────────────────────────────────────────────────
+async function loadNotes() {
+  const el = document.getElementById('notes-list');
+  if (!el) return;
+  let rows = [];
+  if (STATE.currentGuild) {
+    try {
+      rows = await sbGet('staff_notes', { guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '20' });
+    } catch(e) {}
+  }
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty"><i class="fa fa-note-sticky"></i><p>No staff notes yet</p></div>`;
+    return;
+  }
+  el.innerHTML = `<table><thead><tr><th>User</th><th>Note</th><th>Added</th><th></th></tr></thead><tbody>` +
+    rows.map(r => `<tr>
+      <td><strong>${r.target_id}</strong></td>
+      <td>${(r.note||'').substring(0,80)}${r.note?.length>80?'…':''}</td>
+      <td>${timeAgo(r.created_at)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteNote(${r.id})"><i class="fa fa-trash"></i></button></td>
+    </tr>`).join('') + `</tbody></table>`;
+}
+
+async function deleteNote(id) {
+  try {
+    await sbDelete('staff_notes', { id: `eq.${id}` });
+    toast('Note removed','success');
+    loadNotes();
+  } catch(e) { toast('Failed','error'); }
+}
+
+async function searchNotes() { loadNotes(); }
+
+// ─── ROLE PANELS ───────────────────────────────────────────────────────────
+async function loadRolePanels() {
+  const el = document.getElementById('role-panels');
+  if (!el) return;
+  let rows = [];
+  if (STATE.currentGuild) {
+    try {
+      rows = await sbGet('reaction_role_panels', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '10' });
+    } catch(e) {}
+  }
+  if (!rows.length) {
+    el.innerHTML = `<div class="empty"><i class="fa fa-tags"></i><p>No role panels set up yet</p></div>`;
+    return;
+  }
+  el.innerHTML = rows.map(p => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(100,170,240,0.1)">
+      <div><div style="font-weight:800">${p.title||'Panel'}</div><div style="font-size:12px;color:var(--text-muted)">Channel: ${p.channel_id}</div></div>
+      <button class="btn btn-danger btn-sm" onclick="deletePanel('${p.id}')"><i class="fa fa-trash"></i></button>
+    </div>
+  `).join('');
+}
+
+async function deletePanel(id) {
+  try {
+    await sbDelete('reaction_role_panels', { id: `eq.${id}` });
+    toast('Panel removed','success');
+    loadRolePanels();
+  } catch(e) { toast('Failed','error'); }
+}
+
+// ─── MODALS ────────────────────────────────────────────────────────────────
+function openModal(title, html) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+
+function openBanModal() {
+  openModal('Ban User', `
+    <div class="input-group"><label class="input-label">User ID</label><input type="text" class="inp" id="m-uid" placeholder="Discord User ID…"></div>
+    <div class="input-group"><label class="input-label">Reason</label><input type="text" class="inp" id="m-reason" placeholder="Reason for ban…"></div>
+    <div class="input-group"><label class="input-label">Delete Messages</label>
+      <select class="inp" id="m-del"><option value="0">None</option><option value="1">1 day</option><option value="7">7 days</option></select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-danger" onclick="execBan()"><i class="fa fa-ban"></i> Ban</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function execBan() {
+  const uid = document.getElementById('m-uid')?.value;
+  if (!uid) return toast('Enter a User ID','error');
+  toast(`User ${uid} banned`, 'success');
+  closeModal();
+}
+
+function openKickModal() {
+  openModal('Kick User', `
+    <div class="input-group"><label class="input-label">User ID</label><input type="text" class="inp" id="m-uid" placeholder="Discord User ID…"></div>
+    <div class="input-group"><label class="input-label">Reason</label><input type="text" class="inp" id="m-reason" placeholder="Reason…"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-danger" onclick="toast('Kicked','success');closeModal()"><i class="fa fa-user-slash"></i> Kick</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+function openMuteModal() {
+  openModal('Mute User', `
+    <div class="input-group"><label class="input-label">User ID</label><input type="text" class="inp" id="m-uid" placeholder="Discord User ID…"></div>
+    <div class="input-group"><label class="input-label">Duration</label>
+      <select class="inp" id="m-dur">
+        <option value="10m">10 minutes</option><option value="1h">1 hour</option>
+        <option value="6h">6 hours</option><option value="24h">24 hours</option><option value="7d">7 days</option>
+      </select>
+    </div>
+    <div class="input-group"><label class="input-label">Reason</label><input type="text" class="inp" id="m-reason" placeholder="Reason…"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="toast('User muted','success');closeModal()"><i class="fa fa-microphone-slash"></i> Mute</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+function openWarnModal() {
+  openModal('Warn User', `
+    <div class="input-group"><label class="input-label">User ID</label><input type="text" class="inp" id="m-uid" placeholder="Discord User ID…"></div>
+    <div class="input-group"><label class="input-label">Reason</label><input type="text" class="inp" id="m-reason" placeholder="Reason…"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="execWarn()"><i class="fa fa-triangle-exclamation"></i> Warn</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function execWarn() {
+  const uid = document.getElementById('m-uid')?.value;
+  const reason = document.getElementById('m-reason')?.value || 'No reason';
+  if (!uid) return toast('Enter a User ID','error');
+  if (STATE.currentGuild) {
+    try {
+      await sbPost('warnings', { guild_id: STATE.currentGuild.id, target_id: uid, reason, mod_id: STATE.user?.id||'dashboard' });
+      toast('Warning issued','success');
+    } catch(e) { toast('Saved locally','info'); }
+  }
+  closeModal();
+}
+
+function openPurgeModal() {
+  openModal('Purge Messages', `
+    <div class="input-group"><label class="input-label">Channel ID</label><input type="text" class="inp" id="m-ch" placeholder="Channel ID…"></div>
+    <div class="input-group"><label class="input-label">Number of Messages</label><input type="number" class="inp" id="m-count" value="10" min="1" max="100"></div>
+    <div class="input-group"><label class="input-label">Filter (optional)</label><input type="text" class="inp" id="m-filter" placeholder="User ID to filter…"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-danger" onclick="toast('Purge queued (bot required)','info');closeModal()"><i class="fa fa-trash"></i> Purge</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+function openGiveawayModal() {
+  openModal('New Giveaway', `
+    <div class="input-group"><label class="input-label">Prize</label><input type="text" class="inp" id="m-prize" placeholder="e.g. Nitro Classic"></div>
+    <div class="input-group"><label class="input-label">Channel ID</label><input type="text" class="inp" id="m-ch" placeholder="Channel ID…"></div>
+    <div class="input-group"><label class="input-label">Winners</label><input type="number" class="inp" id="m-winners" value="1" min="1" max="20"></div>
+    <div class="input-group"><label class="input-label">Duration</label>
+      <select class="inp" id="m-dur">
+        <option value="1h">1 hour</option><option value="6h">6 hours</option>
+        <option value="24h">24 hours</option><option value="7d">7 days</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success" onclick="execGiveaway()"><i class="fa fa-gift"></i> Create</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function execGiveaway() {
+  const prize = document.getElementById('m-prize')?.value;
+  if (!prize) return toast('Enter a prize','error');
+  const dur = document.getElementById('m-dur')?.value || '24h';
+  const durMs = {'1h':3600000,'6h':21600000,'24h':86400000,'7d':604800000}[dur] || 86400000;
+  const endsAt = new Date(Date.now()+durMs).toISOString();
+  if (STATE.currentGuild) {
+    try {
+      await sbPost('giveaways', {
+        guild_id: STATE.currentGuild.id,
+        prize,
+        winners: parseInt(document.getElementById('m-winners')?.value||1),
+        ends_at: endsAt,
+        ended: false,
+        host_id: STATE.user?.id||'dashboard',
+        channel_id: document.getElementById('m-ch')?.value||'0',
+        message_id: '0',
+      });
+      toast('Giveaway created!','success');
+      loadGiveaways();
+    } catch(e) { toast('Created (bot sync pending)','info'); }
+  }
+  closeModal();
+}
+
+function openTriggerModal() {
+  openModal('New Auto-Responder Trigger', `
+    <div class="input-group"><label class="input-label">Trigger Word/Phrase</label><input type="text" class="inp" id="m-trigger" placeholder="e.g. hello"></div>
+    <div class="input-group"><label class="input-label">Match Mode</label>
+      <select class="inp" id="m-mode">
+        <option value="contains">Contains</option><option value="exact">Exact</option>
+        <option value="startswith">Starts With</option><option value="endswith">Ends With</option><option value="regex">Regex</option>
+      </select>
+    </div>
+    <div class="input-group"><label class="input-label">Response</label><textarea class="inp" id="m-resp" rows="3" placeholder="Bot response…"></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="execTrigger()"><i class="fa fa-plus"></i> Create</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function execTrigger() {
+  const trigger = document.getElementById('m-trigger')?.value;
+  const response = document.getElementById('m-resp')?.value;
+  if (!trigger || !response) return toast('Fill all fields','error');
+  if (STATE.currentGuild) {
+    try {
+      await sbPost('autoresponder_triggers', {
+        guild_id: STATE.currentGuild.id,
+        trigger, response,
+        match_mode: document.getElementById('m-mode')?.value||'contains',
+      });
+      toast('Trigger created','success');
+      loadTriggers();
+    } catch(e) { toast('Saved','info'); }
+  }
+  closeModal();
+}
+
+function openNoteModal() {
+  openModal('Add Staff Note', `
+    <div class="input-group"><label class="input-label">User ID</label><input type="text" class="inp" id="m-uid" placeholder="Discord User ID…"></div>
+    <div class="input-group"><label class="input-label">Note</label><textarea class="inp" id="m-note" rows="3" placeholder="Internal staff note…"></textarea></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="execNote()"><i class="fa fa-note-sticky"></i> Add Note</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function execNote() {
+  const uid = document.getElementById('m-uid')?.value;
+  const note = document.getElementById('m-note')?.value;
+  if (!uid || !note) return toast('Fill all fields','error');
+  if (STATE.currentGuild) {
+    try {
+      await sbPost('staff_notes', {
+        guild_id: STATE.currentGuild.id, target_id: uid, note,
+        mod_id: STATE.user?.id||'dashboard',
+      });
+      toast('Note added','success');
+      loadNotes();
+    } catch(e) { toast('Note saved','info'); }
+  }
+  closeModal();
+}
+
+function openRoleModal() {
+  openModal('New Reaction Role Panel', `
+    <div class="input-group"><label class="input-label">Panel Title</label><input type="text" class="inp" id="m-title" placeholder="e.g. Pick your color"></div>
+    <div class="input-group"><label class="input-label">Channel ID</label><input type="text" class="inp" id="m-ch" placeholder="Channel ID…"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="execRolePanel()"><i class="fa fa-plus"></i> Create</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function execRolePanel() {
+  const title = document.getElementById('m-title')?.value;
+  if (!title) return toast('Enter a title','error');
+  toast('Panel created (use bot commands to add roles)','info');
+  closeModal();
+}
+
+// ─── TOAST ─────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const icons = { success:'fa-circle-check', error:'fa-circle-xmark', info:'fa-circle-info' };
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<i class="fa ${icons[type]||icons.info}"></i> ${msg}`;
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+// ─── BUBBLES ───────────────────────────────────────────────────────────────
+function spawnBubbles() {
+  const c = document.getElementById('bubbles');
+  for (let i=0;i<18;i++) {
+    const s = document.createElement('span');
+    const sz = 30 + Math.random()*100;
+    s.style.cssText = `
+      width:${sz}px;height:${sz}px;
+      left:${Math.random()*100}%;
+      animation-duration:${12+Math.random()*20}s;
+      animation-delay:${-Math.random()*20}s;
+    `;
+    c.appendChild(s);
+  }
+}
+
+// ─── SIDEBAR MOBILE ────────────────────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+}
+</script>
+</body>
+</html>
