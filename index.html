@@ -1260,6 +1260,18 @@ function applyConfigToUI() {
   const bw = c.automod_badwords_list ? c.automod_badwords_list.split(',').filter(Boolean) : [];
   STATE.badWords = bw;
   renderBadWords();
+  // Also pull from dedicated bad_words table (may have entries the config string doesn't)
+  if (STATE.currentGuild) {
+    sbGet('bad_words', { guild_id: `eq.${STATE.currentGuild.id}`, select: 'word', limit: '200' })
+      .then(rows => {
+        const tableWords = rows.map(r => r.word).filter(Boolean);
+        const merged = [...new Set([...STATE.badWords, ...tableWords])];
+        if (merged.length !== STATE.badWords.length) {
+          STATE.badWords = merged;
+          renderBadWords();
+        }
+      }).catch(() => {});
+  }
 }
 
 function setToggle(id, val) {
@@ -1747,12 +1759,29 @@ async function loadModRecent() {
 
 // ─── SAVE FUNCTIONS ────────────────────────────────────────────────────────
 async function saveWarnThresholds() {
-  await saveMany({
+  const settings = {
     warn_mute_at:    document.getElementById('mute-at').value,
     warn_mute_hours: document.getElementById('mute-hrs').value,
     warn_kick_at:    document.getElementById('kick-at').value,
     warn_ban_at:     document.getElementById('ban-at').value,
-  });
+  };
+  // Save to guild_configs (existing behaviour)
+  await saveMany(settings);
+  // Also mirror to warn_thresholds table in case the bot reads from there
+  if (STATE.currentGuild) {
+    const gid = STATE.currentGuild.id;
+    const row = { guild_id: gid, ...Object.fromEntries(Object.entries(settings).map(([k,v])=>[k,parseInt(v)||0])) };
+    try {
+      await sbUpsert('warn_thresholds', row, 'guild_id');
+    } catch(e) {
+      // Upsert unsupported — try patch then insert
+      try {
+        const existing = await sbGet('warn_thresholds', { guild_id: `eq.${gid}`, select: 'guild_id' });
+        if (existing.length) await sbPatch('warn_thresholds', { guild_id: `eq.${gid}` }, row);
+        else                  await sbPost('warn_thresholds', row);
+      } catch(e2) { console.warn('warn_thresholds write failed:', e2.message); }
+    }
+  }
 }
 
 async function saveAltDetect() {
@@ -1844,12 +1873,21 @@ function addBadWord() {
     STATE.badWords.push(w);
     renderBadWords();
     inp.value = '';
+    // Persist to bad_words table
+    if (STATE.currentGuild) {
+      sbPost('bad_words', { guild_id: STATE.currentGuild.id, word: w, created_at: new Date().toISOString() }).catch(() => {});
+    }
   }
 }
 
 function removeBadWord(i) {
+  const word = STATE.badWords[i];
   STATE.badWords.splice(i,1);
   renderBadWords();
+  // Remove from bad_words table
+  if (word && STATE.currentGuild) {
+    sbDelete('bad_words', { guild_id: `eq.${STATE.currentGuild.id}`, word: `eq.${word}` }).catch(() => {});
+  }
 }
 
 // ─── SHOP ──────────────────────────────────────────────────────────────────
@@ -2059,8 +2097,9 @@ async function execBan() {
   const modId = STATE.user?.id || 'dashboard';
   try {
     const entry = { guild_id: gid, action: 'ban', target_id: uid, mod_id: modId, reason, delete_days: parseInt(delDays), created_at: new Date().toISOString() };
-    await sbPost('mod_logs', entry);
+    await sbPost('mod_logs',  entry);
     await sbPost('mod_track', entry).catch(()=>{});
+    await sbPost('modtrack',  entry).catch(()=>{});
     toast(`User ${uid} ban logged`, 'success');
   } catch(e) { toast('DB write failed: ' + e.message, 'error'); }
   closeModal();
@@ -2086,8 +2125,9 @@ async function execKick() {
   const modId = STATE.user?.id || 'dashboard';
   try {
     const entry = { guild_id: gid, action: 'kick', target_id: uid, mod_id: modId, reason, created_at: new Date().toISOString() };
-    await sbPost('mod_logs', entry);
+    await sbPost('mod_logs',  entry);
     await sbPost('mod_track', entry).catch(()=>{});
+    await sbPost('modtrack',  entry).catch(()=>{});
     toast(`User ${uid} kick logged`, 'success');
   } catch(e) { toast('DB write failed: ' + e.message, 'error'); }
   closeModal();
@@ -2120,8 +2160,9 @@ async function execMute() {
   const modId = STATE.user?.id || 'dashboard';
   try {
     const entry = { guild_id: gid, action: 'mute', target_id: uid, mod_id: modId, reason, duration: dur, created_at: new Date().toISOString() };
-    await sbPost('mod_logs', entry);
+    await sbPost('mod_logs',  entry);
     await sbPost('mod_track', entry).catch(()=>{});
+    await sbPost('modtrack',  entry).catch(()=>{});
     toast(`User ${uid} mute logged (${dur})`, 'success');
   } catch(e) { toast('DB write failed: ' + e.message, 'error'); }
   closeModal();
@@ -2147,8 +2188,11 @@ async function execWarn() {
   const modId = STATE.user?.id || 'dashboard';
   try {
     await sbPost('warnings', { guild_id: gid, target_id: uid, reason, mod_id: modId, created_at: new Date().toISOString() });
-    // Also log to mod_logs
-    await sbPost('mod_logs', { guild_id: gid, action: 'warn', target_id: uid, mod_id: modId, reason, created_at: new Date().toISOString() }).catch(()=>{});
+    // Mirror to all mod log tables so the bot sees it regardless of which it reads
+    const logEntry = { guild_id: gid, action: 'warn', target_id: uid, mod_id: modId, reason, created_at: new Date().toISOString() };
+    await sbPost('mod_logs',  logEntry).catch(()=>{});
+    await sbPost('mod_track', logEntry).catch(()=>{});
+    await sbPost('modtrack',  logEntry).catch(()=>{});
     toast('Warning issued','success');
     if (currentPage === 'warnings') loadWarnings();
   } catch(e) { toast('Failed: ' + e.message,'error'); }
