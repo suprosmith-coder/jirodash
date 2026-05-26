@@ -1237,21 +1237,18 @@ async function loadOverview() {
   // ── Real stats from Supabase ──
   const todayISO = new Date(new Date().setHours(0,0,0,0)).toISOString();
 
-  // Members & online from profiles/users table
+  // Members — use user_levels (has guild_id) as member count proxy; profiles is global (no guild_id)
   try {
-    const profiles = await sbGet('profiles', { guild_id: `eq.${gid}`, select: 'user_id,status', limit: '5000' });
-    const total  = profiles.length || '—';
-    const online = profiles.filter(p => p.status === 'online' || p.status === 'idle' || p.status === 'dnd').length;
-    document.getElementById('stat-members').textContent = total;
-    document.getElementById('stat-online').textContent  = online || '—';
-  } catch(e) {
-    document.getElementById('stat-members').textContent = '—';
-    document.getElementById('stat-online').textContent  = '—';
-  }
+    const members = await sbGet('user_levels', { guild_id: `eq.${gid}`, select: 'user_id', limit: '9999' });
+    document.getElementById('stat-members').textContent = members.length || '—';
+  } catch(e) { document.getElementById('stat-members').textContent = '—'; }
+
+  // Online — not tracked in DB; show placeholder
+  document.getElementById('stat-online').textContent = '—';
 
   // Warnings today
   try {
-    const warns = await sbGet('warnings', { guild_id: `eq.${gid}`, created_at: `gte.${todayISO}`, select: 'id,user_id' });
+    const warns = await sbGet('warnings', { guild_id: `eq.${gid}`, created_at: `gte.${todayISO}`, select: 'id' });
     document.getElementById('stat-warns').textContent = warns.length;
   } catch(e) { document.getElementById('stat-warns').textContent = '—'; }
 
@@ -1261,30 +1258,19 @@ async function loadOverview() {
     document.getElementById('stat-giveaways').textContent = gws.length;
   } catch(e) { document.getElementById('stat-giveaways').textContent = '—'; }
 
-  // Messages today from chat_messages or channel_stats_cache
+  // Messages today — chat_messages has no guild_id; use channel_stats_cache
   try {
-    const msgs = await sbGet('chat_messages', { guild_id: `eq.${gid}`, created_at: `gte.${todayISO}`, select: 'id', limit: '9999' });
-    document.getElementById('stat-messages').textContent = msgs.length;
-  } catch(e) {
-    try {
-      const cache = await sbGet('channel_stats_cache', { guild_id: `eq.${gid}`, select: 'messages_today' });
-      const total = cache.reduce((s,r) => s + (r.messages_today||0), 0);
-      document.getElementById('stat-messages').textContent = total || '—';
-    } catch(e2) { document.getElementById('stat-messages').textContent = '—'; }
-  }
+    const cache = await sbGet('channel_stats_cache', { guild_id: `eq.${gid}`, select: 'messages_today' });
+    const total = cache.reduce((s,r) => s + (r.messages_today||0), 0);
+    document.getElementById('stat-messages').textContent = total || '—';
+  } catch(e) { document.getElementById('stat-messages').textContent = '—'; }
 
-  // NixCoins circulating: sum from user_shards then fallback to profiles
+  // NixCoins — user_shards has discord_id + amount (no guild_id); sum all amounts as global total
   try {
-    const shards = await sbGet('user_shards', { guild_id: `eq.${gid}`, select: 'balance', limit: '9999' });
-    const total = shards.reduce((s,r) => s + (parseInt(r.balance)||0), 0);
-    document.getElementById('stat-coins').textContent = total.toLocaleString();
-  } catch(e) {
-    try {
-      const txs = await sbGet('transactions', { guild_id: `eq.${gid}`, select: 'amount,type', limit: '9999' });
-      const net = txs.reduce((s,r) => s + (r.type==='credit'?parseInt(r.amount||0):-parseInt(r.amount||0)), 0);
-      document.getElementById('stat-coins').textContent = net > 0 ? net.toLocaleString() : '—';
-    } catch(e2) { document.getElementById('stat-coins').textContent = '—'; }
-  }
+    const shards = await sbGet('user_shards', { select: 'amount', limit: '9999' });
+    const total = shards.reduce((s,r) => s + (parseInt(r.amount)||0), 0);
+    document.getElementById('stat-coins').textContent = total > 0 ? total.toLocaleString() : '—';
+  } catch(e) { document.getElementById('stat-coins').textContent = '—'; }
 
   loadLogsInto('ov-logs', 8);
   loadLeaderboard('ov-leaderboard', 5);
