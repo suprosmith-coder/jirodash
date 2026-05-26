@@ -896,6 +896,7 @@
               <div class="action-btn" onclick="openWarnModal()"><i class="fa fa-triangle-exclamation"></i> Warn User</div>
               <div class="action-btn" onclick="openPurgeModal()"><i class="fa fa-trash"></i> Purge Msgs</div>
               <div class="action-btn" onclick="openGiveawayModal()"><i class="fa fa-gift"></i> New Giveaway</div>
+              <div class="action-btn" onclick="openSayModal()"><i class="fa fa-comment"></i> Say (Bot)</div>
             </div>
           </div>
         </div>
@@ -917,7 +918,8 @@
         <div class="section-header">
           <div class="section-title"><i class="fa fa-scroll"></i> Audit Logs</div>
           <div style="display:flex;gap:8px">
-            <select class="inp" style="width:auto" id="log-filter">
+            <input type="text" class="inp" id="log-search" placeholder="Search logs…" style="max-width:200px" oninput="filterLogsLive()">
+            <select class="inp" style="width:auto" id="log-filter" onchange="loadLogs()">
               <option value="">All Events</option>
               <option value="ban">Bans</option>
               <option value="kick">Kicks</option>
@@ -958,7 +960,10 @@
           </div>
         </div>
         <div class="card mt-4">
-          <div class="card-title"><i class="fa fa-clock-rotate-left"></i> Recent Actions</div>
+          <div class="card-title" style="justify-content:space-between">
+            <span><i class="fa fa-clock-rotate-left"></i> Recent Actions</span>
+            <input type="text" class="inp" id="mod-search" placeholder="Search by user ID or action…" style="max-width:250px;font-size:12px" oninput="filterModLive()">
+          </div>
           <div id="mod-recent"><div class="spinner"></div></div>
         </div>
       </div>
@@ -1588,8 +1593,7 @@ async function loadLogsInto(containerId, limit = 12) {
   el.innerHTML = logs.map(renderLogItem).join('') || `<div class="empty"><i class="fa fa-scroll"></i><p>No results</p></div>`;
 }
 
-async function loadLogs() {
-  await loadLogsInto('logs-table', 40);
+async function _legacyLoadLogs_UNUSED() {
   // Real unread count: mod_logs from today
   try {
     const todayISO = new Date(new Date().setHours(0,0,0,0)).toISOString();
@@ -1632,10 +1636,31 @@ async function loadLeaderboard(containerId, limit = 10) {
   const maxXp = rows[0]?.xp || 1;
   const rankCls = i => i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'other';
 
-  el.innerHTML = rows.map((r,i) => `
+  // Fetch Discord avatars for known user_ids
+  const avatarCache = {};
+  const avatarFetches = rows.slice(0,10).map(async r => {
+    if (!r.user_id) return;
+    const avatarUrl = r.avatar_url || null;
+    if (avatarUrl) { avatarCache[r.user_id] = avatarUrl; return; }
+    try {
+      // Try fetching from Discord CDN via known pattern stored in DB profile
+      const profile = await sbGet('profiles', { discord_id: `eq.${r.user_id}`, select: 'avatar,discord_id', limit: '1' }).catch(()=>[]);
+      if (profile.length && profile[0].avatar) {
+        avatarCache[r.user_id] = `https://cdn.discordapp.com/avatars/${r.user_id}/${profile[0].avatar}.png?size=64`;
+      }
+    } catch(e) {}
+  });
+  await Promise.all(avatarFetches);
+
+  el.innerHTML = rows.map((r,i) => {
+    const avatarUrl = avatarCache[r.user_id];
+    const avatarEl  = avatarUrl
+      ? `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.textContent='${(r.username||'U')[0].toUpperCase()}'">`
+      : (r.username||r.user_id||'U')[0].toUpperCase();
+    return `
     <div class="lb-row">
       <div class="lb-rank ${rankCls(i)}">${i+1}</div>
-      <div class="lb-avatar">${(r.username||r.user_id||'U')[0].toUpperCase()}</div>
+      <div class="lb-avatar" style="overflow:hidden">${avatarEl}</div>
       <div style="flex:1;min-width:0">
         <div class="lb-name">${r.username || `…${String(r.user_id).slice(-6)}`}</div>
         <div class="xp-bar-outer"><div class="xp-bar-inner" style="width:${Math.round((r.xp||0)/maxXp*100)}%"></div></div>
@@ -1643,7 +1668,7 @@ async function loadLeaderboard(containerId, limit = 10) {
       </div>
       <div class="lb-level">Lv.${r.level||0}</div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
 // ─── GIVEAWAYS ─────────────────────────────────────────────────────────────
@@ -1734,17 +1759,21 @@ async function loadWarnings() {
     });
   } catch(e) { console.warn(e.message); }
   if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-circle-check"></i><p>No warnings recorded</p></div>`; return; }
-  el.innerHTML = rows.map(w => `
+  el.innerHTML = rows.map(w => {
+    const pfp = w.avatar_url
+      ? `<img src="${w.avatar_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      : `<i class="fa fa-triangle-exclamation"></i>`;
+    return `
     <div class="warn-item">
-      <div class="warn-icon"><i class="fa fa-triangle-exclamation"></i></div>
+      <div class="warn-icon" style="${w.avatar_url ? 'overflow:hidden;padding:0' : ''}">${pfp}</div>
       <div style="flex:1">
-        <div class="warn-user">${w.user_id}</div>
+        <div class="warn-user">${w.username || w.user_id}</div>
         <div class="warn-reason">${w.reason||'No reason'}</div>
         <div class="warn-meta"><i class="fa fa-clock"></i> ${timeAgo(w.created_at)} &nbsp;·&nbsp; Mod: ${w.mod_id||'—'} &nbsp;·&nbsp; ID: ${w.id}</div>
       </div>
       <button class="btn btn-danger btn-sm" onclick="deleteWarning(${w.id})"><i class="fa fa-trash"></i></button>
     </div>
-  `).join('');
+  `}).join('');
 }
 
 async function deleteWarning(id) {
@@ -1804,10 +1833,7 @@ async function searchNotes() {
     </tr>`).join('') + `</tbody></table>`;
 }
 
-// ─── MOD RECENT ────────────────────────────────────────────────────────────
-async function loadModRecent() {
-  await loadLogsInto('mod-recent', 15);
-}
+// loadModRecent is now defined below with live search support
 
 // ─── SAVE FUNCTIONS ────────────────────────────────────────────────────────
 async function saveWarnThresholds() {
@@ -2622,6 +2648,154 @@ function spawnBubbles() {
       lb.appendChild(s);
     }
   }
+}
+
+// ─── LOG LIVE SEARCH ───────────────────────────────────────────────────────
+let _cachedLogs = [];
+
+async function loadLogs() {
+  const el = document.getElementById('logs-table');
+  if (!el) return;
+  if (!STATE.currentGuild) { el.innerHTML = `<div class="empty"><i class="fa fa-scroll"></i><p>Select a server</p></div>`; return; }
+  el.innerHTML = '<div class="spinner"></div>';
+  const gid = STATE.currentGuild.id;
+  _cachedLogs = [];
+  try {
+    _cachedLogs = await sbGet('mod_logs', {
+      guild_id: `eq.${gid}`, order: 'created_at.desc', limit: '80',
+    });
+  } catch(e) { console.warn(e.message); }
+  _renderFilteredLogs();
+  try {
+    const todayISO = new Date(new Date().setHours(0,0,0,0)).toISOString();
+    const recent = await sbGet('mod_logs', { guild_id: `eq.${gid}`, created_at: `gte.${todayISO}`, select: 'id' });
+    document.getElementById('log-badge').textContent = recent.length || '0';
+  } catch(e) { document.getElementById('log-badge').textContent = '0'; }
+}
+
+function _renderFilteredLogs() {
+  const el       = document.getElementById('logs-table');
+  if (!el) return;
+  const filterVal = document.getElementById('log-filter')?.value || '';
+  const searchVal = (document.getElementById('log-search')?.value || '').toLowerCase();
+  let logs = _cachedLogs;
+  if (filterVal) logs = logs.filter(l => (l.action||l.type||'').toLowerCase() === filterVal);
+  if (searchVal) logs = logs.filter(l =>
+    (l.target_id||'').toLowerCase().includes(searchVal) ||
+    (l.action||'').toLowerCase().includes(searchVal) ||
+    (l.reason||'').toLowerCase().includes(searchVal) ||
+    (l.mod_id||'').toLowerCase().includes(searchVal)
+  );
+  el.innerHTML = logs.length
+    ? logs.map(renderLogItem).join('')
+    : `<div class="empty"><i class="fa fa-scroll"></i><p>No matching log entries</p></div>`;
+}
+
+function filterLogsLive() { _renderFilteredLogs(); }
+
+// ─── MOD RECENT LIVE SEARCH ────────────────────────────────────────────────
+let _cachedModLogs = [];
+
+async function loadModRecent() {
+  const el = document.getElementById('mod-recent');
+  if (!el) return;
+  if (!STATE.currentGuild) { el.innerHTML = `<div class="empty"><i class="fa fa-scroll"></i><p>Select a server</p></div>`; return; }
+  el.innerHTML = '<div class="spinner"></div>';
+  _cachedModLogs = [];
+  try {
+    _cachedModLogs = await sbGet('mod_logs', {
+      guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '30',
+    });
+  } catch(e) { console.warn(e.message); }
+  _renderFilteredModLogs();
+}
+
+function _renderFilteredModLogs() {
+  const el = document.getElementById('mod-recent');
+  if (!el) return;
+  const q = (document.getElementById('mod-search')?.value || '').toLowerCase();
+  let logs = _cachedModLogs;
+  if (q) logs = logs.filter(l =>
+    (l.target_id||'').toLowerCase().includes(q) ||
+    (l.action||'').toLowerCase().includes(q) ||
+    (l.reason||'').toLowerCase().includes(q) ||
+    (l.mod_id||'').toLowerCase().includes(q)
+  );
+
+  if (!logs.length) {
+    el.innerHTML = q
+      ? `<div class="empty"><i class="fa fa-magnifying-glass"></i><p>No results for "${q}"</p></div>`
+      : `<div class="empty"><i class="fa fa-scroll"></i><p>No recent mod actions</p></div>`;
+    return;
+  }
+
+  // Render with avatar badges
+  el.innerHTML = logs.map(l => {
+    const action = l.action || l.type || 'event';
+    const meta   = logActionMeta(action);
+    const avatarUrl = _modAvatarCache[l.target_id] || null;
+    const avatarEl  = avatarUrl
+      ? `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.innerHTML='<i class=\\"fa ${meta.icon}\\">'>">`
+      : `<i class="fa ${meta.icon}" style="font-size:12px"></i>`;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #f8fafc">
+      <div style="width:32px;height:32px;border-radius:50%;background:#fef2f2;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;color:var(--danger)">${avatarEl}</div>
+      <div style="min-width:50px"><div class="log-time">${timeAgo(l.created_at)}</div></div>
+      <div style="flex:1;font-size:13px;font-weight:600;color:var(--text-soft)">
+        <span class="badge badge-${meta.cls === 'ban' ? 'red' : meta.cls === 'join' ? 'green' : 'blue'}" style="margin-right:6px">${action}</span>
+        <strong>${l.target_id||'?'}</strong>${l.reason ? ` — ${l.reason}` : ''}
+      </div>
+      <div style="font-size:11px;color:var(--text-muted)">by ${l.mod_id||'?'}</div>
+    </div>`;
+  }).join('');
+}
+
+function filterModLive() { _renderFilteredModLogs(); }
+const _modAvatarCache = {};
+
+// ─── SAY MODAL ─────────────────────────────────────────────────────────────
+function openSayModal() {
+  openModal('Say (Bot Message)', `
+    <div style="font-size:12px;color:var(--text-muted);font-weight:600;margin-bottom:14px">
+      Logs the message as a bot-say action in mod_logs. To actually send via Discord, use the <code>?say</code> command.
+    </div>
+    <div class="input-group"><label class="input-label">Channel ID</label><input type="text" class="inp" id="m-say-ch" placeholder="Discord channel ID…"></div>
+    <div class="input-group"><label class="input-label">Message</label><textarea class="inp" id="m-say-msg" rows="3" placeholder="What should the bot say?"></textarea></div>
+    <div class="input-group"><label class="input-label">Style</label>
+      <select class="inp" id="m-say-type">
+        <option value="plain">Plain message</option>
+        <option value="embed">Embed</option>
+        <option value="dm">DM to User</option>
+      </select>
+    </div>
+    <div id="m-say-extra" style="display:none">
+      <div class="input-group"><label class="input-label">Embed Title (optional)</label><input type="text" class="inp" id="m-say-title" placeholder="Title…"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="execSay()"><i class="fa fa-comment"></i> Log Say Action</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+    <script>document.getElementById('m-say-type').onchange=function(){document.getElementById('m-say-extra').style.display=this.value==='embed'?'':'none'};<\/script>
+  `);
+}
+
+async function execSay() {
+  const ch  = document.getElementById('m-say-ch')?.value?.trim();
+  const msg = document.getElementById('m-say-msg')?.value?.trim();
+  const typ = document.getElementById('m-say-type')?.value || 'plain';
+  if (!msg) return toast('Enter a message','error');
+  if (!STATE.currentGuild) return toast('No server selected','error');
+  const gid   = STATE.currentGuild.id;
+  const modId = STATE.user?.id || 'dashboard';
+  try {
+    await sbPost('mod_logs', {
+      guild_id: gid, action: 'say', target_id: ch || '0',
+      mod_id: modId, reason: `[${typ}] ${msg}`, created_at: new Date().toISOString()
+    });
+    toast('Say action logged — use ?say in Discord to send', 'success');
+    if (currentPage === 'moderation') loadModRecent();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+  closeModal();
 }
 
 // ─── SIDEBAR MOBILE ────────────────────────────────────────────────────────
