@@ -1125,6 +1125,16 @@
         <div class="card">
           <div id="role-panels"><div class="spinner"></div></div>
         </div>
+        <!-- Panel role management (shown when a panel is expanded) -->
+        <div class="card mt-4" id="rr-manage-card" style="display:none">
+          <div class="card-title" id="rr-manage-title"><i class="fa fa-sliders"></i> Manage Panel</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+            <button class="btn btn-primary btn-sm" onclick="openAddRoleModal()"><i class="fa fa-plus"></i> Add Role</button>
+            <button class="btn btn-ghost btn-sm" onclick="openExclusiveModal()"><i class="fa fa-toggle-on"></i> Exclusive / Limits</button>
+            <button class="btn btn-danger btn-sm" style="margin-left:auto" onclick="confirmDeletePanel()"><i class="fa fa-trash"></i> Delete Panel</button>
+          </div>
+          <div id="rr-manage-roles"><div class="empty"><i class="fa fa-tag"></i><p>No roles added yet</p></div></div>
+        </div>
       </div>
 
       <!-- ECONOMY -->
@@ -2068,34 +2078,222 @@ async function deleteNote(id) {
 }
 
 // ─── ROLE PANELS ───────────────────────────────────────────────────────────
+// Tracks which panel is currently being managed
+let _rrActivePanel = null;
+
+const STYLE_COLORS = {
+  primary:   '#3b82f6',
+  secondary: '#64748b',
+  success:   '#22c55e',
+  danger:    '#ef4444',
+};
+
 async function loadRolePanels() {
   const el = document.getElementById('role-panels');
   if (!el) return;
   el.innerHTML = '<div class="spinner"></div>';
+  // Reset manage card
+  document.getElementById('rr-manage-card').style.display = 'none';
+  _rrActivePanel = null;
+
   let rows = [];
   if (STATE.currentGuild) {
     try {
-      rows = await sbGet('rr_panels', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '20' });
+      rows = await sbGet('rr_panels', { guild_id: `eq.${STATE.currentGuild.id}`, order: 'panel_id.asc', limit: '20' });
     } catch(e) { console.warn(e.message); }
   }
   if (!rows.length) {
     el.innerHTML = `<div class="empty"><i class="fa fa-tags"></i><p>No role panels set up yet</p></div>`;
     return;
   }
-  el.innerHTML = rows.map(p => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(100,170,240,0.1)">
-      <div><div style="font-weight:800">${p.title||'Panel'}</div><div style="font-size:12px;color:var(--text-muted)">Channel: ${p.channel_id||'—'}</div></div>
-      <button class="btn btn-danger btn-sm" onclick="deletePanel('${p.id}')"><i class="fa fa-trash"></i></button>
+
+  el.innerHTML = rows.map(p => {
+    const roles    = p.roles || [];
+    const excl     = p.exclusive ? `<span class="badge badge-blue" style="margin-left:6px"><i class="fa fa-circle-dot"></i> Exclusive</span>` : '';
+    const maxR     = p.max_roles ? `<span class="badge badge-gray" style="margin-left:4px">Max ${p.max_roles}</span>` : '';
+    const reqRole  = p.required_role_id ? `<span class="badge badge-gray" style="margin-left:4px"><i class="fa fa-lock"></i> Gated</span>` : '';
+    const roleChips = roles.slice(0,8).map(r =>
+      `<span style="display:inline-flex;align-items:center;gap:4px;background:${STYLE_COLORS[r.style]||STYLE_COLORS.secondary}22;
+        color:${STYLE_COLORS[r.style]||STYLE_COLORS.secondary};border:1px solid ${STYLE_COLORS[r.style]||STYLE_COLORS.secondary}44;
+        padding:2px 9px;border-radius:20px;font-size:11px;font-weight:800;">
+        ${r.emoji ? r.emoji+' ' : ''}${r.label||r.role_id}
+      </span>`
+    ).join('');
+    const extra = roles.length > 8 ? `<span style="font-size:11px;color:var(--text-muted);font-weight:700">+${roles.length-8} more</span>` : '';
+    const linked = p.message_id && p.message_id !== '0'
+      ? `<span style="font-size:11px;color:var(--success);font-weight:700"><i class="fa fa-circle-check"></i> Posted</span>`
+      : `<span style="font-size:11px;color:var(--text-muted);font-weight:700"><i class="fa fa-circle-xmark"></i> Not posted</span>`;
+
+    return `
+    <div style="padding:14px 0;border-bottom:1px solid rgba(100,170,240,0.12);cursor:pointer"
+         onclick="selectPanel('${p.panel_id}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-weight:800;font-size:14px">${p.name||'Untitled Panel'}</span>
+          <code style="font-size:10px;color:var(--text-muted);background:#f1f5f9;padding:2px 7px;border-radius:6px">${p.panel_id}</code>
+          ${excl}${maxR}${reqRole}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          ${linked}
+          <i class="fa fa-chevron-right" style="color:var(--text-muted);font-size:11px"></i>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-top:4px">
+        Ch: ${p.channel_id||'—'} &nbsp;·&nbsp; ${roles.length} role(s)
+      </div>
+      ${roles.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px">${roleChips}${extra}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function selectPanel(panelId) {
+  // Load panel data and open manage section
+  if (!STATE.currentGuild) return;
+  sbGet('rr_panels', { panel_id: `eq.${panelId}`, guild_id: `eq.${STATE.currentGuild.id}`, limit: '1' })
+    .then(rows => {
+      if (!rows.length) return;
+      _rrActivePanel = rows[0];
+      renderManagePanel();
+    }).catch(e => console.warn(e.message));
+}
+
+function renderManagePanel() {
+  const p = _rrActivePanel;
+  if (!p) return;
+  const card = document.getElementById('rr-manage-card');
+  card.style.display = '';
+  card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  document.getElementById('rr-manage-title').innerHTML =
+    `<i class="fa fa-sliders"></i> Manage: <strong>${p.name||'Panel'}</strong> <code style="font-size:11px;background:#f1f5f9;padding:2px 7px;border-radius:6px;font-weight:700">${p.panel_id}</code>`;
+
+  const roles = p.roles || [];
+  const el = document.getElementById('rr-manage-roles');
+  if (!roles.length) {
+    el.innerHTML = `<div class="empty"><i class="fa fa-tag"></i><p>No roles added yet — click "Add Role" above</p></div>`;
+    return;
+  }
+  el.innerHTML = roles.map((r, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9">
+      <span style="font-size:18px;min-width:24px;text-align:center">${r.emoji||'🏷️'}</span>
+      <div style="flex:1">
+        <div style="font-weight:800;font-size:13px">${r.label||'Role'}</div>
+        <div style="font-size:11px;color:var(--text-muted);font-weight:600">ID: ${r.role_id} &nbsp;·&nbsp; Style: ${r.style||'secondary'}</div>
+      </div>
+      <span style="background:${STYLE_COLORS[r.style]||STYLE_COLORS.secondary}22;color:${STYLE_COLORS[r.style]||STYLE_COLORS.secondary};
+        border:1px solid ${STYLE_COLORS[r.style]||STYLE_COLORS.secondary}55;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800">${r.style||'secondary'}</span>
+      <button class="btn btn-danger btn-sm" onclick="removeRoleFromPanel('${r.role_id}')"><i class="fa fa-times"></i></button>
     </div>
   `).join('');
 }
 
-async function deletePanel(id) {
+async function removeRoleFromPanel(roleId) {
+  if (!_rrActivePanel) return;
+  const roles = (_rrActivePanel.roles || []).filter(r => r.role_id !== String(roleId));
+  _rrActivePanel.roles = roles;
   try {
-    await sbDelete('rr_panels', { id: `eq.${id}` });
-    toast('Panel removed','success');
+    await sbPatch('rr_panels', { panel_id: `eq.${_rrActivePanel.panel_id}` }, { roles });
+    toast('Role removed from panel', 'success');
+    renderManagePanel();
     loadRolePanels();
-  } catch(e) { toast('Failed','error'); }
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+}
+
+async function confirmDeletePanel() {
+  if (!_rrActivePanel) return;
+  if (!confirm(`Delete panel "${_rrActivePanel.name}" (${_rrActivePanel.panel_id})? This cannot be undone.`)) return;
+  try {
+    await sbDelete('rr_panels', { panel_id: `eq.${_rrActivePanel.panel_id}` });
+    toast('Panel deleted', 'success');
+    _rrActivePanel = null;
+    document.getElementById('rr-manage-card').style.display = 'none';
+    loadRolePanels();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+}
+
+function openAddRoleModal() {
+  if (!_rrActivePanel) return;
+  const roles = _rrActivePanel.roles || [];
+  if (roles.length >= 25) return toast('Maximum of 25 roles per panel reached', 'error');
+  openModal('Add Role to Panel', `
+    <div style="font-size:12px;color:var(--text-muted);font-weight:700;margin-bottom:12px">Panel: <strong>${_rrActivePanel.name}</strong></div>
+    <div class="input-group"><label class="input-label">Role ID</label><input type="text" class="inp" id="m-roleid" placeholder="Discord Role ID…"></div>
+    <div class="input-group"><label class="input-label">Label</label><input type="text" class="inp" id="m-label" placeholder="e.g. Gamer, Blue Team…"></div>
+    <div class="input-group"><label class="input-label">Emoji (optional)</label><input type="text" class="inp" id="m-emoji" placeholder="e.g. 🎮"></div>
+    <div class="input-group"><label class="input-label">Button Style</label>
+      <select class="inp" id="m-style">
+        <option value="secondary">Secondary (Grey)</option>
+        <option value="primary">Primary (Blue)</option>
+        <option value="success">Success (Green)</option>
+        <option value="danger">Danger (Red)</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="execAddRole()"><i class="fa fa-plus"></i> Add Role</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function execAddRole() {
+  if (!_rrActivePanel) return;
+  const roleId = document.getElementById('m-roleid')?.value?.trim();
+  const label  = document.getElementById('m-label')?.value?.trim();
+  const emoji  = document.getElementById('m-emoji')?.value?.trim() || null;
+  const style  = document.getElementById('m-style')?.value || 'secondary';
+  if (!roleId) return toast('Enter a Role ID', 'error');
+
+  const roles = _rrActivePanel.roles || [];
+  if (roles.some(r => r.role_id === roleId)) return toast('That role is already in this panel', 'error');
+
+  const newRole = { role_id: roleId, label: label || roleId, emoji, style };
+  const updated = [...roles, newRole];
+  _rrActivePanel.roles = updated;
+  try {
+    await sbPatch('rr_panels', { panel_id: `eq.${_rrActivePanel.panel_id}` }, { roles: updated });
+    toast(`Added role to panel`, 'success');
+    renderManagePanel();
+    loadRolePanels();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+  closeModal();
+}
+
+function openExclusiveModal() {
+  if (!_rrActivePanel) return;
+  const p = _rrActivePanel;
+  openModal('Exclusive Mode & Limits', `
+    <div style="font-size:12px;color:var(--text-muted);font-weight:700;margin-bottom:14px">Panel: <strong>${p.name}</strong></div>
+    <div class="toggle-row" style="margin-bottom:14px">
+      <div><div class="toggle-label">Exclusive Mode</div><div class="toggle-desc">Only one role can be selected at a time</div></div>
+      <label class="toggle"><input type="checkbox" id="m-exclusive" ${p.exclusive ? 'checked' : ''}><span class="slider"></span></label>
+    </div>
+    <div class="input-group"><label class="input-label">Max Roles (0 = unlimited)</label><input type="number" class="inp" id="m-maxroles" value="${p.max_roles||0}" min="0" max="25"></div>
+    <div class="input-group"><label class="input-label">Required Role ID (optional)</label><input type="text" class="inp" id="m-reqrole" value="${p.required_role_id||''}" placeholder="Leave blank for none"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" onclick="execExclusive()"><i class="fa fa-floppy-disk"></i> Save</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    </div>
+  `);
+}
+
+async function execExclusive() {
+  if (!_rrActivePanel) return;
+  const exclusive     = document.getElementById('m-exclusive')?.checked || false;
+  const max_roles_val = parseInt(document.getElementById('m-maxroles')?.value) || 0;
+  const req_role_id   = document.getElementById('m-reqrole')?.value?.trim() || null;
+  const update = {
+    exclusive,
+    max_roles:        max_roles_val > 0 ? max_roles_val : null,
+    required_role_id: req_role_id || null,
+  };
+  try {
+    await sbPatch('rr_panels', { panel_id: `eq.${_rrActivePanel.panel_id}` }, update);
+    Object.assign(_rrActivePanel, update);
+    toast('Panel settings saved', 'success');
+    loadRolePanels();
+    renderManagePanel();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+  closeModal();
 }
 
 // ─── MODALS ────────────────────────────────────────────────────────────────
@@ -2354,8 +2552,8 @@ async function execNote() {
 
 function openRoleModal() {
   openModal('New Reaction Role Panel', `
-    <div class="input-group"><label class="input-label">Panel Title</label><input type="text" class="inp" id="m-title" placeholder="e.g. Pick your color"></div>
-    <div class="input-group"><label class="input-label">Channel ID</label><input type="text" class="inp" id="m-ch" placeholder="Channel ID…"></div>
+    <div class="input-group"><label class="input-label">Panel Name</label><input type="text" class="inp" id="m-title" placeholder="e.g. Pick your color"></div>
+    <div class="input-group"><label class="input-label">Channel ID (optional)</label><input type="text" class="inp" id="m-ch" placeholder="Channel ID…"></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-primary" onclick="execRolePanel()"><i class="fa fa-plus"></i> Create</button>
       <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
@@ -2364,20 +2562,29 @@ function openRoleModal() {
 }
 
 async function execRolePanel() {
-  const title = document.getElementById('m-title')?.value?.trim();
+  const name  = document.getElementById('m-title')?.value?.trim();
   const chId  = document.getElementById('m-ch')?.value?.trim();
-  if (!title) return toast('Enter a title','error');
-  if (!STATE.currentGuild) return toast('No server selected','error');
+  if (!name) return toast('Enter a panel name', 'error');
+  if (!STATE.currentGuild) return toast('No server selected', 'error');
+
+  // Generate an 8-char panel_id slug (mirrors Python's str(uuid.uuid4())[:8])
+  const panel_id = crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+
   try {
     await sbPost('rr_panels', {
-      guild_id:   STATE.currentGuild.id,
-      title,
-      channel_id: chId || '0',
-      created_at: new Date().toISOString(),
+      panel_id,
+      guild_id:         STATE.currentGuild.id,
+      name,
+      roles:            [],
+      exclusive:        false,
+      max_roles:        null,
+      required_role_id: null,
+      channel_id:       chId || null,
+      message_id:       null,
     });
-    toast('Panel created','success');
+    toast(`Panel "${name}" created (ID: ${panel_id})`, 'success');
     loadRolePanels();
-  } catch(e) { toast('Failed: ' + e.message,'error'); }
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
   closeModal();
 }
 
