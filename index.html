@@ -1779,7 +1779,7 @@ async function loadTriggers() {
   let rows = [];
   if (STATE.currentGuild) {
     try {
-      rows = await sbGet('autoresponders', { guild_id: `eq.${STATE.currentGuild.id}`, limit: '20' });
+      rows = await sbGet('autoresponders', { guild_id: `eq.${STATE.currentGuild.id}`, order: 'trigger_id.asc', limit: '20' });
     } catch(e) { console.warn(e.message); }
   }
   if (!rows.length) {
@@ -1791,13 +1791,13 @@ async function loadTriggers() {
       <td><strong>${r.trigger}</strong></td>
       <td><span class="badge badge-blue">${r.match_mode||'contains'}</span></td>
       <td>${(r.response||'').substring(0,60)}${r.response?.length>60?'…':''}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="deleteTrigger('${r.id}')"><i class="fa fa-trash"></i></button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="deleteTrigger('${r.trigger_id}')"><i class="fa fa-trash"></i></button></td>
     </tr>`).join('') + `</tbody></table>`;
 }
 
 async function deleteTrigger(id) {
   try {
-    await sbDelete('autoresponders', { id: `eq.${id}` });
+    await sbDelete('autoresponders', { trigger_id: `eq.${id}` });
     toast('Trigger removed','success');
     loadTriggers();
   } catch(e) { toast('Failed','error'); }
@@ -2078,7 +2078,7 @@ async function execTrigger() {
       trigger,
       response,
       match_mode: document.getElementById('m-mode')?.value || 'contains',
-      created_at: new Date().toISOString(),
+      enabled:    true,
     });
     toast('Trigger created','success');
     loadTriggers();
