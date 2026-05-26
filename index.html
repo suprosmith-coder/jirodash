@@ -1147,191 +1147,32 @@ function sbHeaders() {
   return { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 }
 
-async function probeTableMode(table) {
-  // Ask PostgREST for the table schema via the root endpoint
-  // GET /rest/v1/ returns OpenAPI spec with all table definitions
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: sbHeaders() });
-    if (r.ok) {
-      const spec = await r.json();
-      const def = spec?.definitions?.[table];
-      if (def?.properties) {
-        const cols = Object.keys(def.properties);
-        // If table has 'key' and 'value' columns it's kv, otherwise columns-based
-        return (cols.includes('key') && cols.includes('value')) ? 'kv' : 'columns';
-      }
-    }
-  } catch(e) { console.warn(e.message); }
-
-  // Fallback: fetch one row from anywhere in the table (no guild filter)
-  try {
-    const url = new URL(`${SUPABASE_URL}/rest/v1/${table}`);
-    url.searchParams.set('limit', '1');
-    const r = await fetch(url, { headers: sbHeaders() });
-    if (!r.ok) return null;
-    const rows = await r.json();
-    if (Array.isArray(rows) && rows.length > 0) {
-      return ('key' in rows[0] && 'value' in rows[0]) ? 'kv' : 'columns';
-    }
-  } catch(e) { console.warn(e.message); }
-
-  // Table exists but completely empty — default to columns (safer for guild_configs)
-  return 'columns';
-}
-
 async function loadGuildConfig() {
   if (!STATE.currentGuild) return;
   const gid = STATE.currentGuild.id;
-
-  for (const table of ['guild_configs', 'guild_config']) {
-    try {
-      // Fetch rows for this guild
-      const rows = await sbGet(table, { guild_id: `eq.${gid}` });
-      if (!Array.isArray(rows)) continue;
-
-      STATE.guildConfig  = {};
-      STATE._configTable = table;
-
-      if (rows.length > 0) {
-        const sample = rows[0];
-        if ('key' in sample && 'value' in sample) {
-          STATE._configMode = 'kv';
-          rows.forEach(r => { STATE.guildConfig[r.key] = r.value; });
-        } else {
-          STATE._configMode = 'columns';
-          Object.assign(STATE.guildConfig, sample);
-        }
-      } else {
-        // Table is empty for this guild — probe any row in the table to get column shape
-        const mode = await probeTableMode(table);
-        STATE._configMode = (mode === 'unknown' || mode === null) ? 'columns' : mode;
-      }
-      applyConfigToUI();
-      return;
-    } catch(e) { console.warn(e.message); }
-  }
-}
-
-function applyConfigToUI() {
-  const c = STATE.guildConfig;
-  setToggle('tog-log-bans', c.log_bans);
-  setToggle('tog-log-kicks', c.log_kicks);
-  setToggle('tog-dm-punish', c.dm_on_punish);
-  setToggle('tog-del-msgs', c.delete_msgs_on_ban);
-  setToggle('tog-antispam', c.automod_antispam);
-  setToggle('tog-antilink', c.automod_antilink);
-  setToggle('tog-alllinks', c.automod_alllinks);
-  setToggle('tog-caps', c.automod_caps);
-  setToggle('tog-badwords', c.automod_badwords);
-  setToggle('tog-altdetect', c.altdetect_enabled);
-  setToggle('tog-autoraid', c.autoraid_enabled);
-  setToggle('tog-xp', c.xp_enabled);
-  setToggle('tog-lvlann', c.levelup_announce);
-  setToggle('tog-welcome', c.welcome_enabled);
-  setToggle('tog-leave', c.leave_enabled);
-  setToggle('tog-eco', c.economy_enabled);
-
-  setVal('alt-min-days', c.altdetect_min_days || 7);
-  setVal('alt-action', c.altdetect_action || 'flag');
-  setVal('alt-channel', c.altdetect_channel || '');
-  setVal('raid-thresh', c.raid_join_threshold || 8);
-  setVal('raid-window', c.raid_window_secs || 10);
-  setVal('raid-action', c.raid_action || 'kick');
-  setVal('mention-limit', c.mention_limit || 5);
-  setVal('mention-mute', c.mention_mute_mins || 10);
-  setVal('mute-at', c.warn_mute_at || 3);
-  setVal('mute-hrs', c.warn_mute_hours || 1);
-  setVal('kick-at', c.warn_kick_at || 5);
-  setVal('ban-at', c.warn_ban_at || 10);
-  setVal('xp-cooldown', c.xp_cooldown || 60);
-  setVal('xp-min', c.xp_min || 15);
-  setVal('xp-max', c.xp_max || 25);
-  setVal('welcome-ch', c.welcome_channel_id || '');
-  setVal('welcome-msg', c.welcome_message || '');
-  setVal('leave-ch', c.leave_channel_id || '');
-  setVal('leave-msg', c.leave_message || '');
-  setVal('autorole-id', c.autorole_id || '');
-  setVal('prefix-inp', c.prefix || '?');
-  setVal('spam-thresh', c.automod_spam_threshold || 5);
-  setVal('daily-amt', c.daily_reward || 250);
-  setVal('work-amt', c.work_reward || 150);
-  setVal('transfer-fee', c.transfer_fee || 5);
-
-  const bw = c.automod_badwords_list ? c.automod_badwords_list.split(',').filter(Boolean) : [];
-  STATE.badWords = bw;
-  renderBadWords();
-  // Also pull from dedicated bad_words table (may have entries the config string doesn't)
-  if (STATE.currentGuild) {
-    sbGet('bad_words', { guild_id: `eq.${STATE.currentGuild.id}`, select: 'word', limit: '200' })
-      .then(rows => {
-        const tableWords = rows.map(r => r.word).filter(Boolean);
-        const merged = [...new Set([...STATE.badWords, ...tableWords])];
-        if (merged.length !== STATE.badWords.length) {
-          STATE.badWords = merged;
-          renderBadWords();
-        }
-      }).catch(() => {});
-  }
-}
-
-function setToggle(id, val) {
-  const el = document.getElementById(id);
-  if (el) el.checked = val === true || val === 'true' || val === 1;
-}
-function setVal(id, val) {
-  const el = document.getElementById(id);
-  if (el && val !== undefined && val !== null) el.value = val;
+  try {
+    const rows = await sbGet('guild_configs', { guild_id: `eq.${gid}`, select: 'config' });
+    STATE.guildConfig = (rows.length > 0 && rows[0].config) ? rows[0].config : {};
+    applyConfigToUI();
+  } catch(e) { console.warn('loadGuildConfig:', e.message); }
 }
 
 async function saveSetting(key, value) {
   if (!STATE.currentGuild) return;
   const gid = STATE.currentGuild.id;
-
-  // If we don't know the table/mode yet, probe now
-  if (!STATE._configTable) await loadGuildConfig();
-  const table = STATE._configTable || 'guild_configs';
-  const mode  = STATE._configMode  || 'columns';
-
   try {
-    if (mode === 'columns') {
-      // One row per guild with column-per-setting — upsert by guild_id
-      await sbUpsert(table, { guild_id: gid, [key]: String(value) }, 'guild_id');
-    } else {
-      // Key-value rows — upsert on (guild_id, key)
-      await sbUpsert(table, { guild_id: gid, key, value: String(value) }, 'guild_id,key');
-    }
+    // guild_configs uses a JSONB 'config' column — load, merge, upsert
+    const config = { ...STATE.guildConfig, [key]: value };
+    await sbUpsert('guild_configs', { guild_id: gid, config }, 'guild_id');
     STATE.guildConfig[key] = value;
     toast('Saved', 'success');
   } catch(e) {
-    // Upsert failed — try plain PATCH then POST
-    try {
-      if (mode === 'columns') {
-        const existing = await sbGet(table, { guild_id: `eq.${gid}`, select: 'guild_id' });
-        if (existing.length) {
-          await sbPatch(table, { guild_id: `eq.${gid}` }, { [key]: String(value) });
-        } else {
-          await sbPost(table, { guild_id: gid, [key]: String(value) });
-        }
-      } else {
-        const existing = await sbGet(table, { guild_id: `eq.${gid}`, key: `eq.${key}` });
-        if (existing.length) {
-          await sbPatch(table, { guild_id: `eq.${gid}`, key: `eq.${key}` }, { value: String(value) });
-        } else {
-          await sbPost(table, { guild_id: gid, key, value: String(value) });
-        }
-      }
-      STATE.guildConfig[key] = value;
-      toast('Saved', 'success');
-    } catch(e2) {
-      toast('Save failed: ' + (e2.message || e.message), 'error');
-      console.error('saveSetting error:', { key, value, table, mode }, e.message, e2.message);
-    }
+    toast('Save failed: ' + e.message, 'error');
+    console.error('saveSetting error:', { key, value }, e.message);
   }
 }
 
 async function saveMany(settings) {
-  // Ensure config mode is detected before batch saving
-  if (!STATE._configTable) await loadGuildConfig();
   for (const [key, value] of Object.entries(settings)) {
     await saveSetting(key, value);
   }
@@ -1410,7 +1251,7 @@ async function loadOverview() {
 
   // Warnings today
   try {
-    const warns = await sbGet('warnings', { guild_id: `eq.${gid}`, created_at: `gte.${todayISO}`, select: 'id' });
+    const warns = await sbGet('warnings', { guild_id: `eq.${gid}`, created_at: `gte.${todayISO}`, select: 'id,user_id' });
     document.getElementById('stat-warns').textContent = warns.length;
   } catch(e) { document.getElementById('stat-warns').textContent = '—'; }
 
@@ -1499,28 +1340,6 @@ async function loadLogsInto(containerId, limit = 12) {
       limit:    String(limit),
     });
   } catch(e) { console.warn(e.message); }
-
-  // Fallback: mod_track
-  if (!logs.length) {
-    try {
-      logs = await sbGet('mod_track', {
-        guild_id: `eq.${gid}`,
-        order:    'created_at.desc',
-        limit:    String(limit),
-      });
-    } catch(e) { console.warn(e.message); }
-  }
-
-  // Fallback: modtrack (alternate table name)
-  if (!logs.length) {
-    try {
-      logs = await sbGet('modtrack', {
-        guild_id: `eq.${gid}`,
-        order:    'created_at.desc',
-        limit:    String(limit),
-      });
-    } catch(e) { console.warn(e.message); }
-  }
 
   if (!logs.length) {
     // Filter from log-filter select if on logs page
@@ -1686,7 +1505,7 @@ async function loadWarnings() {
     <div class="warn-item">
       <div class="warn-icon"><i class="fa fa-triangle-exclamation"></i></div>
       <div style="flex:1">
-        <div class="warn-user">${w.target_id}</div>
+        <div class="warn-user">${w.user_id}</div>
         <div class="warn-reason">${w.reason||'No reason'}</div>
         <div class="warn-meta"><i class="fa fa-clock"></i> ${timeAgo(w.created_at)} &nbsp;·&nbsp; Mod: ${w.mod_id||'—'} &nbsp;·&nbsp; ID: ${w.id}</div>
       </div>
@@ -1712,7 +1531,7 @@ async function searchWarnings() {
   let rows = [];
   try {
     const params = { guild_id: `eq.${STATE.currentGuild.id}`, order: 'created_at.desc', limit: '30' };
-    if (q) params.target_id = `eq.${q}`;
+    if (q) params.user_id = `eq.${q}`;
     rows = await sbGet('warnings', params);
   } catch(e) { console.warn(e.message); }
   if (!rows.length) { el.innerHTML = `<div class="empty"><i class="fa fa-circle-check"></i><p>No warnings found${q ? ' for '+q : ''}</p></div>`; return; }
@@ -1720,7 +1539,7 @@ async function searchWarnings() {
     <div class="warn-item">
       <div class="warn-icon"><i class="fa fa-triangle-exclamation"></i></div>
       <div style="flex:1">
-        <div class="warn-user">${w.target_id}</div>
+        <div class="warn-user">${w.user_id}</div>
         <div class="warn-reason">${w.reason||'No reason'}</div>
         <div class="warn-meta"><i class="fa fa-clock"></i> ${timeAgo(w.created_at)} &nbsp;·&nbsp; Mod: ${w.mod_id||'—'}</div>
       </div>
@@ -2096,10 +1915,8 @@ async function execBan() {
   const gid = STATE.currentGuild.id;
   const modId = STATE.user?.id || 'dashboard';
   try {
-    const entry = { guild_id: gid, action: 'ban', target_id: uid, mod_id: modId, reason, delete_days: parseInt(delDays), created_at: new Date().toISOString() };
-    await sbPost('mod_logs',  entry);
-    await sbPost('mod_track', entry).catch(()=>{});
-    await sbPost('modtrack',  entry).catch(()=>{});
+    const entry = { guild_id: gid, action: 'ban', target_id: uid, mod_id: modId, reason, created_at: new Date().toISOString() };
+    await sbPost('mod_logs', entry);
     toast(`User ${uid} ban logged`, 'success');
   } catch(e) { toast('DB write failed: ' + e.message, 'error'); }
   closeModal();
@@ -2125,9 +1942,7 @@ async function execKick() {
   const modId = STATE.user?.id || 'dashboard';
   try {
     const entry = { guild_id: gid, action: 'kick', target_id: uid, mod_id: modId, reason, created_at: new Date().toISOString() };
-    await sbPost('mod_logs',  entry);
-    await sbPost('mod_track', entry).catch(()=>{});
-    await sbPost('modtrack',  entry).catch(()=>{});
+    await sbPost('mod_logs', entry);
     toast(`User ${uid} kick logged`, 'success');
   } catch(e) { toast('DB write failed: ' + e.message, 'error'); }
   closeModal();
@@ -2160,9 +1975,7 @@ async function execMute() {
   const modId = STATE.user?.id || 'dashboard';
   try {
     const entry = { guild_id: gid, action: 'mute', target_id: uid, mod_id: modId, reason, duration: dur, created_at: new Date().toISOString() };
-    await sbPost('mod_logs',  entry);
-    await sbPost('mod_track', entry).catch(()=>{});
-    await sbPost('modtrack',  entry).catch(()=>{});
+    await sbPost('mod_logs', entry);
     toast(`User ${uid} mute logged (${dur})`, 'success');
   } catch(e) { toast('DB write failed: ' + e.message, 'error'); }
   closeModal();
@@ -2187,12 +2000,9 @@ async function execWarn() {
   const gid   = STATE.currentGuild.id;
   const modId = STATE.user?.id || 'dashboard';
   try {
-    await sbPost('warnings', { guild_id: gid, target_id: uid, reason, mod_id: modId, created_at: new Date().toISOString() });
-    // Mirror to all mod log tables so the bot sees it regardless of which it reads
+    await sbPost('warnings', { guild_id: gid, user_id: uid, reason, mod_id: modId, created_at: new Date().toISOString() });
     const logEntry = { guild_id: gid, action: 'warn', target_id: uid, mod_id: modId, reason, created_at: new Date().toISOString() };
-    await sbPost('mod_logs',  logEntry).catch(()=>{});
-    await sbPost('mod_track', logEntry).catch(()=>{});
-    await sbPost('modtrack',  logEntry).catch(()=>{});
+    await sbPost('mod_logs', logEntry).catch(()=>{});
     toast('Warning issued','success');
     if (currentPage === 'warnings') loadWarnings();
   } catch(e) { toast('Failed: ' + e.message,'error'); }
