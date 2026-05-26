@@ -1703,7 +1703,7 @@ async function loadShop() {
   let rows = [];
   if (STATE.currentGuild) {
     try {
-      rows = await sbGet('shop_items', { guild_id: `eq.${STATE.currentGuild.id}`, order: 'price.asc', limit: '20' });
+      rows = await sbGet('shop_items', { order: 'price.asc', limit: '20' });
     } catch(e) { console.warn(e.message); }
   }
   if (!rows.length) {
@@ -1718,7 +1718,7 @@ async function loadShop() {
         <div class="shopitem-cost"><i class="fa fa-coins coin-icon"></i> ${(i.price||i.cost||0).toLocaleString()} NixCoins</div>
       </div>
       <span class="badge badge-blue">${i.item_type||i.type||'item'}</span>
-      <button class="btn btn-danger btn-sm" style="margin-left:8px" onclick="deleteShopItem('${i.id}')"><i class="fa fa-trash"></i></button>
+      <button class="btn btn-danger btn-sm" style="margin-left:8px" onclick="deleteShopItem('${i.item_id}')"><i class="fa fa-trash"></i></button>
     </div>
   `).join('');
 }
@@ -1752,10 +1752,8 @@ async function execShopItem() {
   if (!STATE.currentGuild) return toast('No server selected','error');
   try {
     await sbPost('shop_items', {
-      guild_id: STATE.currentGuild.id,
       name, price, item_type: itype,
-      role_id: roleId,
-      created_at: new Date().toISOString(),
+      role_id: roleId || null,
     });
     toast('Shop item added','success');
     loadShop();
@@ -1765,7 +1763,7 @@ async function execShopItem() {
 
 async function deleteShopItem(id) {
   try {
-    await sbDelete('shop_items', { id: `eq.${id}` });
+    await sbDelete('shop_items', { item_id: `eq.${id}` });
     toast('Item removed','success');
     loadShop();
   } catch(e) { toast('Failed','error'); }
