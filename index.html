@@ -2072,6 +2072,7 @@ async function execTrigger() {
   if (!STATE.currentGuild) return toast('No server selected','error');
   try {
     await sbPost('autoresponders', {
+      trigger_id: crypto.randomUUID(),
       guild_id:   STATE.currentGuild.id,
       trigger,
       response,
