@@ -640,7 +640,7 @@
           <div class="stat-card"><div class="stat-icon" style="background:rgba(75,207,138,0.15)"><i class="fa fa-circle-check" style="color:var(--success)"></i></div><div class="stat-label">Online</div><div class="stat-value" id="stat-online">—</div></div>
           <div class="stat-card"><div class="stat-icon" style="background:rgba(224,92,106,0.15)"><i class="fa fa-triangle-exclamation" style="color:var(--danger)"></i></div><div class="stat-label">Warnings Today</div><div class="stat-value" id="stat-warns">—</div></div>
           <div class="stat-card"><div class="stat-icon" style="background:rgba(245,158,66,0.15)"><i class="fa fa-gift" style="color:var(--warn)"></i></div><div class="stat-label">Active Giveaways</div><div class="stat-value" id="stat-giveaways">—</div></div>
-          <div class="stat-card"><div class="stat-icon" style="background:rgba(155,89,182,0.15)"><i class="fa fa-star" style="color:#9b59b6"></i></div><div class="stat-label">Messages Today</div><div class="stat-value" id="stat-messages">—</div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:rgba(155,89,182,0.15)"><i class="fa fa-star" style="color:#9b59b6"></i></div><div class="stat-label">Actions Today</div><div class="stat-value" id="stat-messages">—</div></div>
           <div class="stat-card"><div class="stat-icon" style="background:rgba(91,168,245,0.15)"><i class="fa fa-coins" style="color:var(--blue)"></i></div><div class="stat-label">NixCoins Circulating</div><div class="stat-value" id="stat-coins">—</div></div>
         </div>
 
@@ -1258,11 +1258,10 @@ async function loadOverview() {
     document.getElementById('stat-giveaways').textContent = gws.length;
   } catch(e) { document.getElementById('stat-giveaways').textContent = '—'; }
 
-  // Messages today — chat_messages has no guild_id; use channel_stats_cache
+  // Messages today — count mod_logs actions today as proxy (no raw message table with guild_id)
   try {
-    const cache = await sbGet('channel_stats_cache', { guild_id: `eq.${gid}`, select: 'messages_today' });
-    const total = cache.reduce((s,r) => s + (r.messages_today||0), 0);
-    document.getElementById('stat-messages').textContent = total || '—';
+    const logs = await sbGet('mod_logs', { guild_id: `eq.${gid}`, created_at: `gte.${todayISO}`, select: 'id' });
+    document.getElementById('stat-messages').textContent = logs.length || '0';
   } catch(e) { document.getElementById('stat-messages').textContent = '—'; }
 
   // NixCoins — user_shards has discord_id + amount (no guild_id); sum all amounts as global total
