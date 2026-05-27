@@ -132,7 +132,7 @@
   /* GRIDS */
   .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
-  @media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr}.sidebar{display:none}}
+  @media(max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr}}
 
   /* TABLES */
   table{width:100%;border-collapse:collapse;font-size:13px}
@@ -260,8 +260,8 @@
   .menu-toggle{display:none;background:none;border:none;font-size:17px;color:var(--text-soft);cursor:pointer;margin-right:4px;padding:4px}
   @media(max-width:900px){
     .menu-toggle{display:block}
-    .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:50;transform:translateX(-100%)}
-    .sidebar.open{transform:none;box-shadow:4px 0 30px rgba(0,0,0,0.3)}
+    .sidebar{position:fixed;left:0;top:0;height:100%;z-index:51;transform:translateX(-100%);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+    .sidebar.open{transform:translateX(0);box-shadow:4px 0 30px rgba(0,0,0,0.3)}
     .content{padding:16px 14px}.topbar{padding:0 14px}
   }
 
@@ -341,7 +341,7 @@
 
 <!-- MAIN APP -->
 <div id="app" style="display:none">
-  <div id="sidebar-overlay" onclick="closeSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:49;backdrop-filter:blur(2px)"></div>
+  <div id="sidebar-overlay" onclick="closeSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:50;backdrop-filter:blur(2px);transition:opacity .25s"></div>
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
@@ -2408,13 +2408,26 @@ async function execSay() {
 function toggleSidebar() {
   const s = document.getElementById('sidebar');
   const o = document.getElementById('sidebar-overlay');
-  s.classList.toggle('open');
-  if(o) o.style.display = s.classList.contains('open') ? 'block' : 'none';
+  const isOpen = s.classList.toggle('open');
+  if (o) {
+    if (isOpen) {
+      o.style.display = 'block';
+      o.style.opacity = '0';
+      requestAnimationFrame(() => { o.style.opacity = '1'; });
+    } else {
+      o.style.opacity = '0';
+      setTimeout(() => { o.style.display = 'none'; }, 250);
+    }
+  }
 }
 function closeSidebar() {
-  document.getElementById('sidebar').classList.remove('open');
+  const s = document.getElementById('sidebar');
   const o = document.getElementById('sidebar-overlay');
-  if(o) o.style.display = 'none';
+  s.classList.remove('open');
+  if (o) {
+    o.style.opacity = '0';
+    setTimeout(() => { o.style.display = 'none'; }, 250);
+  }
 }
 </script>
 </body>
